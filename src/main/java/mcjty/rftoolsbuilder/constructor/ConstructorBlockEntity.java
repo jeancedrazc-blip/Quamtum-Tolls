@@ -1,5 +1,8 @@
 package mcjty.rftoolsbuilder.constructor;
 
+import mcjty.rftoolsbuilder.constructor.plan.BlockSubstitutionRules;
+import mcjty.rftoolsbuilder.constructor.plan.ConstructionJob;
+import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -34,6 +37,8 @@ public final class ConstructorBlockEntity extends BlockEntity {
     private boolean running;
     /** True after one material + FE for the current shot were consumed. */
     private boolean shotReserved;
+    /** Runtime normalized plan. Persistence will be tied to the schematic source reference. */
+    private ConstructionJob activeJob;
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
         super(ConstructorBootstrap.CONSTRUCTOR_BLOCK_ENTITY.get(), pos, state);
@@ -45,10 +50,35 @@ public final class ConstructorBlockEntity extends BlockEntity {
     public BlockState targetState() { return targetState; }
     public int shotProgress() { return shotProgress; }
     public boolean shotReserved() { return shotReserved; }
+    public int jobIndex() { return activeJob == null ? 0 : activeJob.index(); }
+    public int jobTotal() { return activeJob == null ? (targetPos == null ? 0 : 1) : activeJob.total(); }
+    public float jobProgress() { return activeJob == null ? (status == ConstructorStatus.COMPLETE ? 1.0f : 0.0f) : activeJob.progress(); }
 
     public boolean queuePlacement(BlockPos target, BlockState state) {
         if (target == null || state == null || target.equals(worldPosition)) return false;
         if (this.targetPos != null && status != ConstructorStatus.COMPLETE && status != ConstructorStatus.ERROR) return false;
+        activeJob = null;
+        prepareTarget(target, state);
+        return true;
+    }
+
+    public boolean startPlan(ConstructionPlan plan, BlockPos origin, BlockSubstitutionRules substitutions) {
+        if (plan == null || origin == null || substitutions == null) return false;
+        if (running && status != ConstructorStatus.COMPLETE && status != ConstructorStatus.ERROR) return false;
+        activeJob = new ConstructionJob(plan, origin, substitutions);
+        if (!activeJob.hasCurrent()) {
+            targetPos = null;
+            targetState = null;
+            running = false;
+            status = ConstructorStatus.COMPLETE;
+            setChangedAndSync();
+            return true;
+        }
+        prepareTarget(activeJob.currentWorldPos(), activeJob.currentTargetState());
+        return true;
+    }
+
+    private void prepareTarget(BlockPos target, BlockState state) {
         this.targetPos = target.immutable();
         this.targetState = state;
         this.phaseTick = 0;
@@ -57,7 +87,6 @@ public final class ConstructorBlockEntity extends BlockEntity {
         this.running = true;
         this.status = ConstructorStatus.READY;
         setChangedAndSync();
-        return true;
     }
 
     public void pause() {
@@ -91,10 +120,10 @@ public final class ConstructorBlockEntity extends BlockEntity {
         if (!shotReserved) {
             BlockState current = level.getBlockState(targetPos);
             if (current == targetState || current.equals(targetState)) {
-                finishWithoutShot();
+                finishCurrentAndAdvance(0);
                 return;
             }
-            // Initial world policy is AIR_ONLY. Other policies are added by the plan/job layer.
+            // Initial world policy is AIR_ONLY. Other policies are applied by the job layer later.
             if (!current.isAir() || !targetState.canSurvive(level, targetPos)) {
                 running = false;
                 transition(ConstructorStatus.BLOCKED);
@@ -191,19 +220,26 @@ public final class ConstructorBlockEntity extends BlockEntity {
         }
 
         shotReserved = false;
-        status = ConstructorStatus.COMPLETE;
-        running = false;
-        phaseTick = 0;
-        shotProgress = FLIGHT_TICKS;
-        setChangedAndSync();
+        finishCurrentAndAdvance(FLIGHT_TICKS);
     }
 
-    private void finishWithoutShot() {
+    private void finishCurrentAndAdvance(int finishedShotProgress) {
         shotReserved = false;
+        if (activeJob != null && activeJob.advance()) {
+            targetPos = activeJob.currentWorldPos();
+            targetState = activeJob.currentTargetState();
+            phaseTick = 0;
+            shotProgress = 0;
+            running = true;
+            status = ConstructorStatus.READY;
+            setChangedAndSync();
+            return;
+        }
+
         status = ConstructorStatus.COMPLETE;
         running = false;
         phaseTick = 0;
-        shotProgress = 0;
+        shotProgress = finishedShotProgress;
         setChangedAndSync();
     }
 

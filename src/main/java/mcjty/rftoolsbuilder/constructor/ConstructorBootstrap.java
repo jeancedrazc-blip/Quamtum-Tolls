@@ -1,13 +1,17 @@
 package mcjty.rftoolsbuilder.constructor;
 
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -15,6 +19,10 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ConstructorBootstrap {
     public static final String MOD_ID = "rftoolsbuilder";
+    private static final ResourceKey<CreativeModeTab> MAIN_TAB = ResourceKey.create(
+            Registries.CREATIVE_MODE_TAB,
+            ResourceLocation.fromNamespaceAndPath(MOD_ID, "main")
+    );
 
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MOD_ID);
     private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MOD_ID);
@@ -60,6 +68,7 @@ public final class ConstructorBootstrap {
         ITEMS.register(modBus);
         BLOCK_ENTITY_TYPES.register(modBus);
         modBus.addListener(ConstructorBootstrap::registerCapabilities);
+        modBus.addListener(ConstructorBootstrap::addCreativeTabContents);
     }
 
     private static void registerCapabilities(RegisterCapabilitiesEvent event) {
@@ -68,5 +77,11 @@ public final class ConstructorBootstrap {
                 CONSTRUCTOR_BLOCK_ENTITY.get(),
                 (blockEntity, side) -> blockEntity.energyStorage()
         );
+    }
+
+    private static void addCreativeTabContents(BuildCreativeModeTabContentsEvent event) {
+        if (event.getTabKey().equals(MAIN_TAB)) {
+            event.accept(CONSTRUCTOR_ITEM.get());
+        }
     }
 }

@@ -6,10 +6,16 @@ import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.MenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -18,7 +24,7 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.energy.SimpleEnergyHandler;
 
-public final class ConstructorBlockEntity extends BlockEntity {
+public final class ConstructorBlockEntity extends BlockEntity implements MenuProvider {
     public static final int ENERGY_CAPACITY = 5_000_000;
     public static final int MAX_RECEIVE = 250_000;
     public static final int BASE_PLACEMENT_COST = 1_000;
@@ -35,10 +41,34 @@ public final class ConstructorBlockEntity extends BlockEntity {
     private int phaseTick;
     private int shotProgress;
     private boolean running;
-    /** True after one material + FE for the current shot were consumed. */
     private boolean shotReserved;
-    /** Runtime normalized plan. Persistence will be tied to the schematic source reference. */
     private ConstructionJob activeJob;
+
+    private final ContainerData menuData = new ContainerData() {
+        @Override
+        public int get(int index) {
+            return switch (index) {
+                case 0 -> energy.getEnergyStored();
+                case 1 -> energy.getMaxEnergyStored();
+                case 2 -> status.ordinal();
+                case 3 -> jobIndex();
+                case 4 -> jobTotal();
+                case 5 -> shotProgress;
+                case 6 -> running ? 1 : 0;
+                case 7 -> currentEnergyCost();
+                default -> 0;
+            };
+        }
+
+        @Override
+        public void set(int index, int value) {
+        }
+
+        @Override
+        public int getCount() {
+            return 8;
+        }
+    };
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
         super(ConstructorBootstrap.CONSTRUCTOR_BLOCK_ENTITY.get(), pos, state);
@@ -50,9 +80,15 @@ public final class ConstructorBlockEntity extends BlockEntity {
     public BlockState targetState() { return targetState; }
     public int shotProgress() { return shotProgress; }
     public boolean shotReserved() { return shotReserved; }
+    public boolean isRunning() { return running; }
+    public ContainerData menuData() { return menuData; }
     public int jobIndex() { return activeJob == null ? 0 : activeJob.index(); }
     public int jobTotal() { return activeJob == null ? (targetPos == null ? 0 : 1) : activeJob.total(); }
     public float jobProgress() { return activeJob == null ? (status == ConstructorStatus.COMPLETE ? 1.0f : 0.0f) : activeJob.progress(); }
+
+    public int currentEnergyCost() {
+        return targetPos == null || targetState == null ? 0 : energyCost(targetPos, targetState);
+    }
 
     public boolean queuePlacement(BlockPos target, BlockState state) {
         if (target == null || state == null || target.equals(worldPosition)) return false;
@@ -90,18 +126,43 @@ public final class ConstructorBlockEntity extends BlockEntity {
     }
 
     public void pause() {
+        if (targetPos == null || status == ConstructorStatus.COMPLETE || status == ConstructorStatus.ERROR) return;
         running = false;
         status = ConstructorStatus.PAUSED;
         setChangedAndSync();
     }
 
     public void resume() {
-        if (targetPos != null) {
+        if (targetPos != null && status != ConstructorStatus.COMPLETE && status != ConstructorStatus.ERROR) {
             running = true;
             status = ConstructorStatus.READY;
             phaseTick = 0;
             setChangedAndSync();
         }
+    }
+
+    public boolean clearJob() {
+        if (shotReserved || status == ConstructorStatus.FIRING) return false;
+        activeJob = null;
+        targetPos = null;
+        targetState = null;
+        phaseTick = 0;
+        shotProgress = 0;
+        running = false;
+        status = ConstructorStatus.IDLE;
+        setChangedAndSync();
+        return true;
+    }
+
+    public boolean handleMenuButton(int id) {
+        return switch (id) {
+            case 0 -> {
+                if (running) pause(); else resume();
+                yield true;
+            }
+            case 1 -> clearJob();
+            default -> false;
+        };
     }
 
     public static void tick(Level level, BlockPos pos, BlockState blockState, ConstructorBlockEntity be) {
@@ -123,7 +184,6 @@ public final class ConstructorBlockEntity extends BlockEntity {
                 finishCurrentAndAdvance(0);
                 return;
             }
-            // Initial world policy is AIR_ONLY. Other policies are applied by the job layer later.
             if (!current.isAir() || !targetState.canSurvive(level, targetPos)) {
                 running = false;
                 transition(ConstructorStatus.BLOCKED);
@@ -187,7 +247,6 @@ public final class ConstructorBlockEntity extends BlockEntity {
             transition(ConstructorStatus.WAITING_ENERGY);
             return false;
         }
-        // Extract material first. FE is consumed only after the item transaction commits.
         if (!ConstructorMaterialAccess.extractOne(level, worldPosition, targetState)) {
             transition(ConstructorStatus.WAITING_MATERIAL);
             return false;
@@ -201,8 +260,6 @@ public final class ConstructorBlockEntity extends BlockEntity {
     private void completeShot(ServerLevel level) {
         BlockState current = level.getBlockState(targetPos);
         if (!current.isAir() || !targetState.canSurvive(level, targetPos)) {
-            // Keep the material/energy reservation attached to this shot. Resume after the obstruction
-            // is fixed without charging a second time.
             running = false;
             status = ConstructorStatus.BLOCKED;
             phaseTick = 0;
@@ -267,6 +324,16 @@ public final class ConstructorBlockEntity extends BlockEntity {
         if (level instanceof ServerLevel server) {
             server.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
         }
+    }
+
+    @Override
+    public Component getDisplayName() {
+        return Component.literal("Constructor");
+    }
+
+    @Override
+    public AbstractContainerMenu createMenu(int id, Inventory inventory, Player player) {
+        return new ConstructorMenu(id, inventory, this, menuData);
     }
 
     @Override

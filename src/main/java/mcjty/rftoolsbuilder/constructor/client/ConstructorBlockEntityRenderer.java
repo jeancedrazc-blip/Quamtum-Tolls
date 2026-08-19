@@ -23,8 +23,11 @@ import org.jetbrains.annotations.Nullable;
 public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer<ConstructorBlockEntity, ConstructorRenderState> {
     private static final int FULL_BRIGHT = 0x00F000F0;
     private static final BlockDisplayContext DISPLAY_CONTEXT = BlockDisplayContext.create();
+
+    // The barrel trunnion is deliberately above the one-block base. The old
+    // 0.52 Y pivot made the approved long cannon rotate almost on the ground.
     private static final double PIVOT_X = 0.5;
-    private static final double PIVOT_Y = 0.52;
+    private static final double PIVOT_Y = 0.96875; // 15.5 model pixels
     private static final double PIVOT_Z = 0.5;
     private static final double MUZZLE_DISTANCE = 1.50;
 

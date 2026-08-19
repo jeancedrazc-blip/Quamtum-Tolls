@@ -9,7 +9,7 @@
 - Canonical baseline SHA-256: `1ea89fcadeb43b9c78245a082fb26e92471e93a1c0901abee21b02b9fe52b7e7`
 - Internal 3.0.5 JAR metadata version: `26.1.2-7.0.5-port.1`
 
-The user-supplied 3.0.5 JAR identified by the SHA-256 above is the authoritative release baseline. Do not infer a baseline from older commits or remembered versions.
+The user-supplied 3.0.5 JAR identified by the SHA-256 above is the authoritative release baseline. Never infer a newer/older baseline from memory.
 
 ## Source-of-truth rule
 
@@ -22,96 +22,95 @@ Before changing Quantum Tools in any conversation:
 5. Never invent missing changelog entries.
 6. Preserve existing behavior unless an explicit change request says otherwise.
 
-## Current implementation visible in the 3.0.5 baseline
-
-The supplied JAR contains the Miner/Builder implementation, Quarry Card classes, filter UI/menu classes, Miner UI/menu classes, renderer classes, translations, recipes, models and textures.
-
 ## Constructor — approved direction
 
-- The schematic-driven construction machine must have its **own physical model/form**, not look like a normal cubic block.
-- Do **not** use the word `Quantum` in the machine's name.
-- The machine should be format-agnostic through adapters/readers instead of being locked to one schematic source.
-- Planned compatibility includes Create schematic data and other schematic formats where technically practical.
-- The construction projectile must use the **full model/texture of the BlockState being placed**, not an approximate color.
-- The machine needs a **block substitution system**, e.g. schematic cobblestone -> build with smooth stone.
-- The placement animation should be a distinctive part of the machine's identity.
-- It is an FE-powered machine.
+- Actual machine name must **not** use the word `Quantum`.
+- Dedicated sci-fi cannon/turret, not a generic cube or robotic arm.
+- Long horizontal cannon with white/light metallic armor, gunmetal structure and cyan emissive channel/muzzle.
+- Mechanical center pivot/trunnion above the base; 360-degree horizontal aiming plus vertical elevation toward the exact target block.
+- Compact turret base with splayed stabilizer feet.
+- FE-powered.
+- Projectile renders the full target BlockState model/texture.
+- Neutral `ConstructionPlan` execution layer, independent of schematic source.
+- Block substitution is required (example cobblestone -> smooth stone).
+- Planned real schematic adapters include Create and `.schem`; those readers are not complete in dev.4.
 
-### Approved Constructor physical model
+### Constructor visual correction after dev.3 runtime test
 
-- Dedicated sci-fi cannon/turret, not a generic industrial cube or robotic arm.
-- Long horizontal cannon body with layered futuristic armor and cyan energy channel.
-- Real aiming assembly: horizontal turret rotation plus vertical elevation toward the exact placement position.
-- Exposed mechanical pivot/joint.
-- Compact low-profile base with stabilizer geometry; avoid bulky pedestal forms.
-- Main materials/colors: light metallic/white armor, dark gunmetal structure, cyan emissive accents.
-- Dedicated energy-emitter muzzle.
+The dev.3 runtime model was rejected because the barrel rotated around a pivot only about half a block above the floor. The current branch raises the pivot/trunnion and aligns turret, barrel and cyan energy channel with the approved cannon silhouette. This change must be preserved and visually re-tested in dev.4.
+
+## Schematic Table — approved concept and dev.4 implementation
+
+Approved visual direction:
+
+- It must read clearly as a **real workbench/table**, not a cubic machine.
+- Wide white/light metallic tabletop frame, dark structural legs/frame, cyan holographic/touch surface and front control module.
+- Small orange technical/warning accents.
+- Same product-family language as the Constructor and Miner.
+
+Implemented in **3.0.6-dev.4**:
+
+- registered block + BlockItem + Block Entity + Menu + client Screen;
+- dedicated `rftoolsbuilder:schematic_table` item/block;
+- dedicated `rftoolsbuilder:schematic_card` item;
+- card slot plus FROM/TO block-sample slots for substitution mapping;
+- card-persisted rotation (0/90/180/270), mirror (off/X/Z) and X/Y/Z offsets (-64..64);
+- up to 8 exact block replacement mappings stored on the Schematic Card;
+- UI buttons for rotation, mirror, offset, preview/test, save mapping, clear mappings and send;
+- nearest Constructor lookup within 16 horizontal blocks / 5 vertical blocks;
+- SEND converts the current test schematic into the existing `ConstructionPlan` engine and applies the card's transformations/replacements before starting the Constructor;
+- the current PREVIEW/SEND source is intentionally a deterministic 5x3 test wall (cobblestone border + stone center) so energy, materials, aiming, placement, transformations and substitution can be runtime-tested before real Create/`.schem` readers are attached.
+
+Important: dev.4 does **not** yet claim real Create schematic or `.schem` file loading. The table/card/execution pipeline is now testable; format readers are the next integration layer.
 
 ## Miner — approved Concept 1 visual
 
-Approved on 2026-08-19 after concept exploration.
+- Same visual family as Constructor, distinct compact mining silhouette.
+- White/light armor over gunmetal chassis, cyan mining/energy core, small orange accents.
+- Front must remain nearly flush; do not restore a large protruding drill/nose.
+- Existing UI, Quarry Cards, hologram, energy and orientation behavior should remain unless explicitly changed.
+- Pre-redesign 3.0.5 appearance remains a fallback reference if requested.
 
-- Same product-family language as the Constructor, but a distinct mining silhouette.
-- Compact, robust body rather than a cannon.
-- White/light metallic armor over a gunmetal technical chassis.
-- Cyan mining/energy core integrated into the front.
-- **Front must remain nearly flush with the main body**; do not restore the large protruding drill/nose from rejected concepts.
-- Cyan upper energy detail/core.
-- Small **orange warning/accent details** for identity and contrast.
-- Low reinforced base.
-- Preserve existing Miner UI, Quarry Cards, hologram/area renderer, energy system and orientation behavior unless separately requested.
-- The pre-redesign 3.0.5 Miner appearance remains a fallback reference if the user asks to restore it.
-
-## Miner balance — current development decision
-
-The 3.0.5 Miner can complete up to one successful mining operation per game tick in ideal conditions. This was judged too fast.
-
-Current development balance:
+## Miner balance
 
 - base work interval: **4 ticks**;
-- effective ideal maximum: approximately **5 mined blocks per second** instead of approximately 20/s;
-- implemented by throttling the mining `work` cycle, while leaving normal Block Entity tick/update behavior intact.
+- ideal maximum approximately **5 mined blocks/second**, reduced from approximately 20/s;
+- implemented by throttling mining `work`, not the whole Block Entity tick.
 
-This value is a development balance point and can be adjusted after gameplay testing.
+This remains a gameplay-test value.
 
-## Cards — next visual round, not implemented yet
+## Cards — dev.4 visual redesign implemented
 
-Approved visual direction to preserve for the next card pass:
+All existing card textures plus the Schematic Card use the approved family:
 
-- 32×32 item textures;
-- slightly wider card proportions;
+- true **32x32 RGBA** textures;
+- visually wider/horizontal card silhouette inside the 32x32 canvas;
 - white/gunmetal casing;
 - cyan central display/emissive language;
-- small function-specific colored accents;
-- do not implement this card redesign until the user asks for that round.
+- function-specific accent colors/icons;
+- redesigned files: Shape Card, Quarry, Clear Quarry, Fortune, Clear Fortune, Silk, Clear Silk and Schematic Card.
 
-## Current development checkpoint — 3.0.6-dev.3
+## Current development checkpoint — 3.0.6-dev.4
 
 Development branch: `agent/constructor-foundation`
 Draft PR: #1
 
-Current checkpoint includes:
+Code commit validated by GitHub Actions (Java 25 / NeoForge 26.1.2.95):
 
-- Constructor FE machine foundation;
-- Constructor yaw/pitch aiming and BlockState projectile renderer;
-- material lookup/consumption and authoritative placement on impact;
-- neutral `ConstructionPlan` layer and exact block-substitution rules;
-- Constructor registration integrated into the main `rftoolsbuilder` mod bootstrap through a Mixin instead of relying on a separate mod entrypoint;
-- Constructor explicitly added to the `rftoolsbuilder:main` creative tab through `BuildCreativeModeTabContentsEvent` so it appears in creative/item browsers;
-- Miner Concept 1 visual with cyan + orange accents;
-- Miner speed throttled to one work cycle every four ticks;
-- Quarry Card visual redesign intentionally deferred.
+`35e21a650243e5bc47b9a45adbbcd2a76002f07f`
 
-Validated development JAR SHA-256 for 3.0.6-dev.3:
+Validated merged development JAR SHA-256:
 
-`0d7f8505cf8a3d39c868437d4426d192cba7c9838ae8ea777c8af363f46330bf`
+`aeba1e53325c5ee94be74b870d82fa2275fbce625b9a807f99b9ec45d5a9c913`
 
-The development JAR for this checkpoint is built by merging the validated patch over the canonical 3.0.5 JAR and enabling `quantumtools.mixins.json` in `META-INF/neoforge.mods.toml`.
+JAR build label: **3.0.6-dev.4**
+
+The JAR was built by overlaying the CI-validated branch patch over the existing dev.3 JAR (which itself preserves the verified 3.0.5 baseline), merging translations by key, retaining `quantumtools.mixins.json`, and replacing the corrected Constructor/card/table resources.
 
 ## Binary baseline storage note
 
-The repository previously claimed that the 3.0.5 JAR was fully stored as Base64 parts, but that upload was not completed. Do **not** rely on `baseline/parts/` as a complete artifact source unless a later commit explicitly records a successful verified upload. The canonical SHA-256 above remains the verification key for the user-supplied baseline artifact.
+The repository previously claimed that the 3.0.5 JAR was fully stored as Base64 parts, but that upload was not completed. Do not rely on `baseline/parts/` unless a future commit explicitly records a verified complete upload. The canonical SHA-256 above remains the verification key.
 
 ## Versioning rule
 
-The next final release must be created from the verified 3.0.5 baseline and must increment from 3.0.5. Development builds may use `3.0.6-dev.*`; do not call them the final 3.0.6 until runtime testing is complete.
+The next final release must increment from verified 3.0.5. Development builds may use `3.0.6-dev.*`; do not call them final 3.0.6 until runtime testing is complete.

@@ -19,6 +19,7 @@ public final class ConstructorClient {
 
     @SubscribeEvent
     public static void registerScreens(RegisterMenuScreensEvent event) {
+        event.register(ConstructorBootstrap.CONSTRUCTOR_MENU.get(), ConstructorScreen::new);
         event.register(ConstructorBootstrap.SCHEMATIC_TABLE_MENU.get(), SchematicTableScreen::new);
     }
 }

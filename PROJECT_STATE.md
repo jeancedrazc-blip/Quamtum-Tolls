@@ -85,7 +85,7 @@ Approved visual direction to preserve for the next card pass:
 - small function-specific colored accents;
 - do not implement this card redesign until the user asks for that round.
 
-## Current development checkpoint — 3.0.6-dev.2
+## Current development checkpoint — 3.0.6-dev.3
 
 Development branch: `agent/constructor-foundation`
 Draft PR: #1
@@ -97,11 +97,16 @@ Current checkpoint includes:
 - material lookup/consumption and authoritative placement on impact;
 - neutral `ConstructionPlan` layer and exact block-substitution rules;
 - Constructor registration integrated into the main `rftoolsbuilder` mod bootstrap through a Mixin instead of relying on a separate mod entrypoint;
+- Constructor explicitly added to the `rftoolsbuilder:main` creative tab through `BuildCreativeModeTabContentsEvent` so it appears in creative/item browsers;
 - Miner Concept 1 visual with cyan + orange accents;
 - Miner speed throttled to one work cycle every four ticks;
 - Quarry Card visual redesign intentionally deferred.
 
-The development JAR for this checkpoint must be built by merging the validated patch over the canonical 3.0.5 JAR and enabling `quantumtools.mixins.json` in `META-INF/neoforge.mods.toml`.
+Validated development JAR SHA-256 for 3.0.6-dev.3:
+
+`0d7f8505cf8a3d39c868437d4426d192cba7c9838ae8ea777c8af363f46330bf`
+
+The development JAR for this checkpoint is built by merging the validated patch over the canonical 3.0.5 JAR and enabling `quantumtools.mixins.json` in `META-INF/neoforge.mods.toml`.
 
 ## Binary baseline storage note
 

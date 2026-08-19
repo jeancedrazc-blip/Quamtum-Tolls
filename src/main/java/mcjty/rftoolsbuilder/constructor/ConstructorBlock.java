@@ -7,6 +7,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -57,7 +58,17 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
-        if (level.getBlockEntity(pos) instanceof ConstructorBlockEntity) {
+        if (level.getBlockEntity(pos) instanceof ConstructorBlockEntity constructor) {
+            // Temporary developer trigger for visual/energy/material validation.
+            // Empty-hand click targets six blocks in front; crouching also raises the target three blocks.
+            if (!level.isClientSide()) {
+                Direction facing = state.getValue(FACING);
+                BlockPos target = pos.relative(facing, 6);
+                if (player.isShiftKeyDown()) {
+                    target = target.above(3);
+                }
+                constructor.queuePlacement(target, Blocks.COBBLESTONE.defaultBlockState());
+            }
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.PASS;

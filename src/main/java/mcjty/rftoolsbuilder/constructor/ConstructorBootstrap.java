@@ -69,6 +69,8 @@ public final class ConstructorBootstrap {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SchematicTableBlockEntity>> SCHEMATIC_TABLE_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("schematic_table", () -> new BlockEntityType<>(SchematicTableBlockEntity::new, false, SCHEMATIC_TABLE.get()));
 
+    public static final DeferredHolder<MenuType<?>, MenuType<ConstructorMenu>> CONSTRUCTOR_MENU =
+            MENUS.register("constructor", () -> IMenuTypeExtension.create(ConstructorMenu::new));
     public static final DeferredHolder<MenuType<?>, MenuType<SchematicTableMenu>> SCHEMATIC_TABLE_MENU =
             MENUS.register("schematic_table", () -> IMenuTypeExtension.create(SchematicTableMenu::new));
 

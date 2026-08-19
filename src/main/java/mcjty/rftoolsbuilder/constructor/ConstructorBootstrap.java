@@ -3,6 +3,7 @@ package mcjty.rftoolsbuilder.constructor;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.level.block.Block;
@@ -11,6 +12,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -27,6 +29,7 @@ public final class ConstructorBootstrap {
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MOD_ID);
     private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MOD_ID);
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD_ID);
+    private static final DeferredRegister<MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, MOD_ID);
     private static boolean initialized;
 
     public static final DeferredBlock<ConstructorBlock> CONSTRUCTOR = BLOCKS.registerBlock(
@@ -51,10 +54,23 @@ public final class ConstructorBootstrap {
             props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
     );
 
+    public static final DeferredBlock<SchematicTableBlock> SCHEMATIC_TABLE = BLOCKS.registerBlock(
+            "schematic_table",
+            SchematicTableBlock::new,
+            props -> props.strength(4.5f, 10.0f).sound(SoundType.METAL).noOcclusion()
+    );
+
     public static final DeferredItem<BlockItem> CONSTRUCTOR_ITEM = ITEMS.registerSimpleBlockItem(CONSTRUCTOR);
+    public static final DeferredItem<BlockItem> SCHEMATIC_TABLE_ITEM = ITEMS.registerSimpleBlockItem(SCHEMATIC_TABLE);
+    public static final DeferredItem<SchematicCardItem> SCHEMATIC_CARD = ITEMS.registerItem("schematic_card", SchematicCardItem::new);
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ConstructorBlockEntity>> CONSTRUCTOR_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("constructor", () -> new BlockEntityType<>(ConstructorBlockEntity::new, false, CONSTRUCTOR.get()));
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SchematicTableBlockEntity>> SCHEMATIC_TABLE_BLOCK_ENTITY =
+            BLOCK_ENTITY_TYPES.register("schematic_table", () -> new BlockEntityType<>(SchematicTableBlockEntity::new, false, SCHEMATIC_TABLE.get()));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<SchematicTableMenu>> SCHEMATIC_TABLE_MENU =
+            MENUS.register("schematic_table", () -> IMenuTypeExtension.create(SchematicTableMenu::new));
 
     private ConstructorBootstrap() {
     }
@@ -67,6 +83,7 @@ public final class ConstructorBootstrap {
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         BLOCK_ENTITY_TYPES.register(modBus);
+        MENUS.register(modBus);
         modBus.addListener(ConstructorBootstrap::registerCapabilities);
         modBus.addListener(ConstructorBootstrap::addCreativeTabContents);
     }
@@ -82,6 +99,8 @@ public final class ConstructorBootstrap {
     private static void addCreativeTabContents(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey().equals(MAIN_TAB)) {
             event.accept(CONSTRUCTOR_ITEM.get());
+            event.accept(SCHEMATIC_TABLE_ITEM.get());
+            event.accept(SCHEMATIC_CARD.get());
         }
     }
 }

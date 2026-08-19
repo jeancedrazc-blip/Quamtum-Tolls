@@ -1,3 +1,5 @@
 {
-  "block.rftoolsbuilder.constructor": "Constructor"
+  "block.rftoolsbuilder.constructor": "Constructor",
+  "block.rftoolsbuilder.schematic_table": "Schematic Table",
+  "item.rftoolsbuilder.schematic_card": "Schematic Card"
 }

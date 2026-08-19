@@ -1,0 +1,10 @@
+{
+  "project": "Quantum Tools",
+  "version": "3.0.5",
+  "minecraft": "26.1.2",
+  "loader": "NeoForge",
+  "output": "QuantumTools-3.0.5.jar",
+  "sha256": "1ea89fcadeb43b9c78245a082fb26e92471e93a1c0901abee21b02b9fe52b7e7",
+  "encoding": "base64-chunks",
+  "parts_glob": "parts/QuantumTools-3.0.5.jar.b64.part*"
+}

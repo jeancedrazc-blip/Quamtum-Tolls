@@ -2,72 +2,111 @@
 
 ## Canonical baseline
 
-- Current project version: **3.0.5**
+- Current released project version: **3.0.5**
 - Minecraft: **26.1.2**
 - Loader: **NeoForge**
 - Mod id preserved by the current build: `rftoolsbuilder`
-- Canonical JAR: `baseline/QuantumTools-3.0.5.jar`
-- SHA-256: `1ea89fcadeb43b9c78245a082fb26e92471e93a1c0901abee21b02b9fe52b7e7`
-- Internal JAR metadata version: `26.1.2-7.0.5-port.1`
+- Canonical baseline SHA-256: `1ea89fcadeb43b9c78245a082fb26e92471e93a1c0901abee21b02b9fe52b7e7`
+- Internal 3.0.5 JAR metadata version: `26.1.2-7.0.5-port.1`
+
+The user-supplied 3.0.5 JAR identified by the SHA-256 above is the authoritative release baseline. Do not infer a baseline from older commits or remembered versions.
 
 ## Source-of-truth rule
 
 Before changing Quantum Tools in any conversation:
 
 1. Read this file.
-2. Verify the latest repository tag/release/commit.
-3. Verify the canonical baseline hash when the baseline JAR is involved.
+2. Verify the latest repository branch/PR/release state.
+3. Verify the canonical baseline hash when the 3.0.5 artifact is involved.
 4. Never replace a newer baseline with an older remembered version.
 5. Never invent missing changelog entries.
 6. Preserve existing behavior unless an explicit change request says otherwise.
 
 ## Current implementation visible in the 3.0.5 baseline
 
-The supplied JAR contains the Builder/Quarry implementation, Quarry Card classes, filter UI/menu classes, Builder UI/menu classes, renderer classes, translations, recipes, models and textures.
+The supplied JAR contains the Miner/Builder implementation, Quarry Card classes, filter UI/menu classes, Miner UI/menu classes, renderer classes, translations, recipes, models and textures.
 
-## Approved construction-machine direction
+## Constructor — approved direction
 
-These decisions are approved project state and should be preserved unless explicitly changed later:
-
-- The new schematic-driven construction machine must have its **own physical model/form**, not look like a normal cubic block.
+- The schematic-driven construction machine must have its **own physical model/form**, not look like a normal cubic block.
 - Do **not** use the word `Quantum` in the machine's name.
 - The machine should be format-agnostic through adapters/readers instead of being locked to one schematic source.
 - Planned compatibility includes Create schematic data and other schematic formats where technically practical.
-- The construction projectile must use the **full texture of the block being placed**, not an approximate color.
+- The construction projectile must use the **full model/texture of the BlockState being placed**, not an approximate color.
 - The machine needs a **block substitution system**, e.g. schematic cobblestone -> build with smooth stone.
 - The placement animation should be a distinctive part of the machine's identity.
+- It is an FE-powered machine.
 
-### Approved physical model — locked on 2026-08-19
+### Approved Constructor physical model
 
-The user approved the sci-fi cannon concept shown in the final concept sheet. Treat this as the canonical visual direction for implementation:
+- Dedicated sci-fi cannon/turret, not a generic industrial cube or robotic arm.
+- Long horizontal cannon body with layered futuristic armor and cyan energy channel.
+- Real aiming assembly: horizontal turret rotation plus vertical elevation toward the exact placement position.
+- Exposed mechanical pivot/joint.
+- Compact low-profile base with stabilizer geometry; avoid bulky pedestal forms.
+- Main materials/colors: light metallic/white armor, dark gunmetal structure, cyan emissive accents.
+- Dedicated energy-emitter muzzle.
 
-- Overall silhouette is a **dedicated sci-fi cannon/turret**, not a generic industrial machine or robotic arm.
-- Long horizontal cannon body with layered futuristic armor panels and an exposed cyan energy channel along the barrel.
-- Cannon must be mounted on a real aiming assembly: **horizontal turret rotation plus vertical elevation**, so the barrel visibly points toward the exact block-placement position.
-- Central pivot/joint is visually exposed and should read as the mechanical aiming axis.
-- Base is **compact, low-profile and turret-like**, with several articulated/splayed stabilizer feet around it; avoid the large bulky circular pedestal from rejected concepts.
-- Main materials/colors: light metallic/white armor, dark gunmetal structure and cyan emissive accents. Keep the design clean and engineered rather than overdecorated.
-- The muzzle is a dedicated energy emitter, visually distinct from a conventional firearm barrel.
-- The approved concept is a visual reference only; incidental text/spec numbers rendered in the concept image (range, reload, energy naming, etc.) are **not gameplay requirements unless explicitly approved later**.
+## Miner — approved Concept 1 visual
 
-## Miner visual redesign — approved direction 2026-08-19
+Approved on 2026-08-19 after concept exploration.
 
-The existing Miner/Builder block must be visually aligned with the Constructor as part of the same machine family, while keeping a distinct mining silhouette.
+- Same product-family language as the Constructor, but a distinct mining silhouette.
+- Compact, robust body rather than a cannon.
+- White/light metallic armor over a gunmetal technical chassis.
+- Cyan mining/energy core integrated into the front.
+- **Front must remain nearly flush with the main body**; do not restore the large protruding drill/nose from rejected concepts.
+- Cyan upper energy detail/core.
+- Small **orange warning/accent details** for identity and contrast.
+- Low reinforced base.
+- Preserve existing Miner UI, Quarry Cards, hologram/area renderer, energy system and orientation behavior unless separately requested.
+- The pre-redesign 3.0.5 Miner appearance remains a fallback reference if the user asks to restore it.
 
-- Preserve all existing Miner/Builder behavior, UI, quarry cards, hologram/area renderer and energy logic; this redesign is visual only unless explicitly expanded later.
-- Replace the old full cube appearance with a dedicated sci-fi mining unit.
-- Reuse the Constructor material language: light metallic/white armor, dark gunmetal chassis and cyan emissive accents.
-- Miner silhouette is more vertical/compact than the Constructor, with a heavy central chassis rather than a cannon body.
-- Front face has a recessed cyan mining/emitter chamber framed by separate white armor pylons.
-- Top section has a dark technical cap with a cyan energy core/strip to visually connect it to the Constructor energy channel.
-- Side housings/vents provide industrial mass and make the machine readable from all angles.
-- The blockstate facing still defines the front of the machine, so existing placement/orientation behavior remains unchanged.
-- The block/item model should share the same visual model so inventory appearance remains consistent.
+## Miner balance — current development decision
 
-## Binary baseline storage
+The 3.0.5 Miner can complete up to one successful mining operation per game tick in ideal conditions. This was judged too fast.
 
-The exact 3.0.5 JAR is preserved losslessly in `baseline/parts/` as ordered Base64 chunks. Run `scripts/restore_baseline.py` to rebuild `baseline/QuantumTools-3.0.5.jar`; the script verifies the SHA-256 above.
+Current development balance:
+
+- base work interval: **4 ticks**;
+- effective ideal maximum: approximately **5 mined blocks per second** instead of approximately 20/s;
+- implemented by throttling the mining `work` cycle, while leaving normal Block Entity tick/update behavior intact.
+
+This value is a development balance point and can be adjusted after gameplay testing.
+
+## Cards — next visual round, not implemented yet
+
+Approved visual direction to preserve for the next card pass:
+
+- 32×32 item textures;
+- slightly wider card proportions;
+- white/gunmetal casing;
+- cyan central display/emissive language;
+- small function-specific colored accents;
+- do not implement this card redesign until the user asks for that round.
+
+## Current development checkpoint — 3.0.6-dev.2
+
+Development branch: `agent/constructor-foundation`
+Draft PR: #1
+
+Current checkpoint includes:
+
+- Constructor FE machine foundation;
+- Constructor yaw/pitch aiming and BlockState projectile renderer;
+- material lookup/consumption and authoritative placement on impact;
+- neutral `ConstructionPlan` layer and exact block-substitution rules;
+- Constructor registration integrated into the main `rftoolsbuilder` mod bootstrap through a Mixin instead of relying on a separate mod entrypoint;
+- Miner Concept 1 visual with cyan + orange accents;
+- Miner speed throttled to one work cycle every four ticks;
+- Quarry Card visual redesign intentionally deferred.
+
+The development JAR for this checkpoint must be built by merging the validated patch over the canonical 3.0.5 JAR and enabling `quantumtools.mixins.json` in `META-INF/neoforge.mods.toml`.
+
+## Binary baseline storage note
+
+The repository previously claimed that the 3.0.5 JAR was fully stored as Base64 parts, but that upload was not completed. Do **not** rely on `baseline/parts/` as a complete artifact source unless a later commit explicitly records a successful verified upload. The canonical SHA-256 above remains the verification key for the user-supplied baseline artifact.
 
 ## Versioning rule
 
-The next release must be created from this verified 3.0.5 baseline and must increment from 3.0.5. Do not reuse 3.0.4 or another earlier build as the implementation base.
+The next final release must be created from the verified 3.0.5 baseline and must increment from 3.0.5. Development builds may use `3.0.6-dev.*`; do not call them the final 3.0.6 until runtime testing is complete.

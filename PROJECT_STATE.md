@@ -25,7 +25,7 @@ Before changing Quantum Tools in any conversation:
 
 The supplied JAR contains the Builder/Quarry implementation, Quarry Card classes, filter UI/menu classes, Builder UI/menu classes, renderer classes, translations, recipes, models and textures.
 
-## Current design direction for the next construction machine
+## Approved construction-machine direction
 
 These decisions are approved project state and should be preserved unless explicitly changed later:
 
@@ -36,7 +36,19 @@ These decisions are approved project state and should be preserved unless explic
 - The construction projectile must use the **full texture of the block being placed**, not an approximate color.
 - The machine needs a **block substitution system**, e.g. schematic cobblestone -> build with smooth stone.
 - The placement animation should be a distinctive part of the machine's identity.
-- The physical layout/model is the next design task before implementation.
+
+### Approved physical model — locked on 2026-08-19
+
+The user approved the sci-fi cannon concept shown in the final concept sheet. Treat this as the canonical visual direction for implementation:
+
+- Overall silhouette is a **dedicated sci-fi cannon/turret**, not a generic industrial machine or robotic arm.
+- Long horizontal cannon body with layered futuristic armor panels and an exposed cyan energy channel along the barrel.
+- Cannon must be mounted on a real aiming assembly: **horizontal turret rotation plus vertical elevation**, so the barrel visibly points toward the exact block-placement position.
+- Central pivot/joint is visually exposed and should read as the mechanical aiming axis.
+- Base is **compact, low-profile and turret-like**, with several articulated/splayed stabilizer feet around it; avoid the large bulky circular pedestal from rejected concepts.
+- Main materials/colors: light metallic/white armor, dark gunmetal structure and cyan emissive accents. Keep the design clean and engineered rather than overdecorated.
+- The muzzle is a dedicated energy emitter, visually distinct from a conventional firearm barrel.
+- The approved concept is a visual reference only; incidental text/spec numbers rendered in the concept image (range, reload, energy naming, etc.) are **not gameplay requirements unless explicitly approved later**.
 
 ## Binary baseline storage
 

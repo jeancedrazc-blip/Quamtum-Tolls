@@ -2,6 +2,7 @@ package mcjty.rftoolsbuilder.constructor;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
@@ -26,6 +27,24 @@ public final class ConstructorBootstrap {
             "constructor",
             ConstructorBlock::new,
             props -> props.strength(5.0f, 12.0f).sound(SoundType.METAL).noOcclusion()
+    );
+
+    // Render-only block models. They have no item and are never placed in-world;
+    // the BER resolves their baked models and applies turret/barrel transforms.
+    public static final DeferredBlock<Block> CONSTRUCTOR_TURRET_VISUAL = BLOCKS.registerBlock(
+            "constructor_turret_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f)
+    );
+    public static final DeferredBlock<Block> CONSTRUCTOR_BARREL_VISUAL = BLOCKS.registerBlock(
+            "constructor_barrel_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f)
+    );
+    public static final DeferredBlock<Block> CONSTRUCTOR_ENERGY_VISUAL = BLOCKS.registerBlock(
+            "constructor_energy_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
     );
 
     public static final DeferredItem<BlockItem> CONSTRUCTOR_ITEM = ITEMS.registerSimpleBlockItem(CONSTRUCTOR);

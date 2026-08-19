@@ -50,6 +50,20 @@ The user approved the sci-fi cannon concept shown in the final concept sheet. Tr
 - The muzzle is a dedicated energy emitter, visually distinct from a conventional firearm barrel.
 - The approved concept is a visual reference only; incidental text/spec numbers rendered in the concept image (range, reload, energy naming, etc.) are **not gameplay requirements unless explicitly approved later**.
 
+## Miner visual redesign — approved direction 2026-08-19
+
+The existing Miner/Builder block must be visually aligned with the Constructor as part of the same machine family, while keeping a distinct mining silhouette.
+
+- Preserve all existing Miner/Builder behavior, UI, quarry cards, hologram/area renderer and energy logic; this redesign is visual only unless explicitly expanded later.
+- Replace the old full cube appearance with a dedicated sci-fi mining unit.
+- Reuse the Constructor material language: light metallic/white armor, dark gunmetal chassis and cyan emissive accents.
+- Miner silhouette is more vertical/compact than the Constructor, with a heavy central chassis rather than a cannon body.
+- Front face has a recessed cyan mining/emitter chamber framed by separate white armor pylons.
+- Top section has a dark technical cap with a cyan energy core/strip to visually connect it to the Constructor energy channel.
+- Side housings/vents provide industrial mass and make the machine readable from all angles.
+- The blockstate facing still defines the front of the machine, so existing placement/orientation behavior remains unchanged.
+- The block/item model should share the same visual model so inventory appearance remains consistent.
+
 ## Binary baseline storage
 
 The exact 3.0.5 JAR is preserved losslessly in `baseline/parts/` as ordered Base64 chunks. Run `scripts/restore_baseline.py` to rebuild `baseline/QuantumTools-3.0.5.jar`; the script verifies the SHA-256 above.

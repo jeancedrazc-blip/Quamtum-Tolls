@@ -3,6 +3,8 @@ name: Constructor foundation build
 on:
   push:
     branches: [ "agent/constructor-foundation" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:

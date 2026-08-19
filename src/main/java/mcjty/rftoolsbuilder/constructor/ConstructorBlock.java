@@ -57,10 +57,7 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
-        if (level.getBlockEntity(pos) instanceof ConstructorBlockEntity constructor) {
-            if (!level.isClientSide()) {
-                player.displayClientMessage(constructor.statusMessage(), true);
-            }
+        if (level.getBlockEntity(pos) instanceof ConstructorBlockEntity) {
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.PASS;

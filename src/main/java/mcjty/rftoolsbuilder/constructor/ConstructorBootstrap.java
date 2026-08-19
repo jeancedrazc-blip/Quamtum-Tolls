@@ -6,8 +6,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
@@ -15,13 +13,13 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
-@Mod(ConstructorBootstrap.MOD_ID)
 public final class ConstructorBootstrap {
     public static final String MOD_ID = "rftoolsbuilder";
 
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MOD_ID);
     private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MOD_ID);
     private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD_ID);
+    private static boolean initialized;
 
     public static final DeferredBlock<ConstructorBlock> CONSTRUCTOR = BLOCKS.registerBlock(
             "constructor",
@@ -29,8 +27,6 @@ public final class ConstructorBootstrap {
             props -> props.strength(5.0f, 12.0f).sound(SoundType.METAL).noOcclusion()
     );
 
-    // Render-only block models. They have no item and are never placed in-world;
-    // the BER resolves their baked models and applies turret/barrel transforms.
     public static final DeferredBlock<Block> CONSTRUCTOR_TURRET_VISUAL = BLOCKS.registerBlock(
             "constructor_turret_visual",
             Block::new,
@@ -52,7 +48,14 @@ public final class ConstructorBootstrap {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ConstructorBlockEntity>> CONSTRUCTOR_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("constructor", () -> new BlockEntityType<>(ConstructorBlockEntity::new, false, CONSTRUCTOR.get()));
 
-    public ConstructorBootstrap(IEventBus modBus, ModContainer container) {
+    private ConstructorBootstrap() {
+    }
+
+    public static synchronized void init(IEventBus modBus) {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         BLOCK_ENTITY_TYPES.register(modBus);

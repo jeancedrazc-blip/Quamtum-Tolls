@@ -19,6 +19,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.1'
+      - name: Restore canonical 3.0.5 baseline
+        run: python3 scripts/restore_baseline.py
       - name: Compile constructor patch
         run: gradle build --stacktrace
       - uses: actions/upload-artifact@v4

@@ -24,10 +24,8 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
     private static final int FULL_BRIGHT = 0x00F000F0;
     private static final BlockDisplayContext DISPLAY_CONTEXT = BlockDisplayContext.create();
 
-    // The barrel trunnion is deliberately above the one-block base. The old
-    // 0.52 Y pivot made the approved long cannon rotate almost on the ground.
     private static final double PIVOT_X = 0.5;
-    private static final double PIVOT_Y = 0.96875; // 15.5 model pixels
+    private static final double PIVOT_Y = 0.96875;
     private static final double PIVOT_Z = 0.5;
     private static final double MUZZLE_DISTANCE = 1.50;
 
@@ -59,35 +57,71 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         BlockPos origin = blockEntity.getBlockPos();
         BlockPos target = blockEntity.targetPos();
         BlockState targetState = blockEntity.targetState();
+        state.status = blockEntity.status();
         state.hasTarget = target != null && targetState != null;
-
-        Direction facing = blockEntity.getBlockState().getValue(BlockStateProperties.HORIZONTAL_FACING);
-        state.yaw = homeYaw(facing);
-        state.pitch = 0.0f;
         state.projectileVisible = false;
         state.projectileProgress = 0.0f;
-        state.energyActive = blockEntity.status() == ConstructorStatus.CHARGING || blockEntity.status() == ConstructorStatus.FIRING;
+        state.recoil = 0.0f;
 
-        if (!state.hasTarget) {
-            return;
+        Direction facing = blockEntity.getBlockState().getValue(BlockStateProperties.HORIZONTAL_FACING);
+        float desiredYaw = homeYaw(facing);
+        float desiredPitch = 0.0f;
+
+        double time = partialTick;
+        if (blockEntity.getLevel() != null) {
+            time += blockEntity.getLevel().getGameTime();
         }
 
-        this.blockResolver.update(state.projectile, targetState, DISPLAY_CONTEXT);
+        if (!state.hasTarget && (state.status == ConstructorStatus.IDLE
+                || state.status == ConstructorStatus.COMPLETE
+                || state.status == ConstructorStatus.PAUSED)) {
+            desiredYaw += (float) Math.sin(time * 0.035) * 1.6f;
+            desiredPitch = (float) Math.sin(time * 0.045) * 0.7f;
+        }
 
-        state.targetX = target.getX() - origin.getX() + 0.5;
-        state.targetY = target.getY() - origin.getY() + 0.5;
-        state.targetZ = target.getZ() - origin.getZ() + 0.5;
+        if (state.hasTarget) {
+            this.blockResolver.update(state.projectile, targetState, DISPLAY_CONTEXT);
 
-        double dx = state.targetX - PIVOT_X;
-        double dy = state.targetY - PIVOT_Y;
-        double dz = state.targetZ - PIVOT_Z;
-        double horizontal = Math.sqrt(dx * dx + dz * dz);
-        state.yaw = (float) Math.toDegrees(Math.atan2(dx, dz));
-        state.pitch = (float) -Math.toDegrees(Math.atan2(dy, Math.max(1.0e-5, horizontal)));
+            state.targetX = target.getX() - origin.getX() + 0.5;
+            state.targetY = target.getY() - origin.getY() + 0.5;
+            state.targetZ = target.getZ() - origin.getZ() + 0.5;
 
-        if (blockEntity.status() == ConstructorStatus.FIRING) {
+            double dx = state.targetX - PIVOT_X;
+            double dy = state.targetY - PIVOT_Y;
+            double dz = state.targetZ - PIVOT_Z;
+            double horizontal = Math.sqrt(dx * dx + dz * dz);
+            desiredYaw = (float) Math.toDegrees(Math.atan2(dx, dz));
+            desiredPitch = (float) -Math.toDegrees(Math.atan2(dy, Math.max(1.0e-5, horizontal)));
+        }
+
+        state.targetYaw = desiredYaw;
+        state.targetPitch = desiredPitch;
+
+        if (!state.initialized) {
+            state.displayYaw = desiredYaw;
+            state.displayPitch = desiredPitch;
+            state.initialized = true;
+        } else {
+            float yawFactor = state.status == ConstructorStatus.AIMING ? 0.34f : 0.18f;
+            float pitchFactor = state.status == ConstructorStatus.AIMING ? 0.30f : 0.16f;
+            state.displayYaw = approachAngle(state.displayYaw, desiredYaw, yawFactor);
+            state.displayPitch += (desiredPitch - state.displayPitch) * pitchFactor;
+        }
+
+        if (state.status == ConstructorStatus.CHARGING) {
+            state.energyPulse = 1.02f + (float) ((Math.sin(time * 1.75) + 1.0) * 0.045);
+        } else if (state.status == ConstructorStatus.FIRING) {
+            state.energyPulse = 1.10f;
+        } else if (state.status == ConstructorStatus.WAITING_ENERGY) {
+            state.energyPulse = 0.94f + (float) ((Math.sin(time * 0.35) + 1.0) * 0.025);
+        } else {
+            state.energyPulse = 1.0f;
+        }
+
+        if (state.status == ConstructorStatus.FIRING && state.hasTarget) {
             state.projectileVisible = true;
             state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick) / (float) ConstructorBlockEntity.FLIGHT_TICKS);
+            state.recoil = 0.145f * (1.0f - smoothStep(state.projectileProgress));
         }
     }
 
@@ -95,9 +129,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
     public void submit(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState cameraState) {
         submitTurret(state, poseStack, collector);
         submitBarrel(state, poseStack, collector);
-        if (state.energyActive) {
-            submitEnergy(state, poseStack, collector);
-        }
+        submitEnergy(state, poseStack, collector);
         if (state.projectileVisible && state.hasTarget) {
             submitProjectile(state, poseStack, collector);
         }
@@ -105,21 +137,26 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
     private static void submitTurret(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
         poseStack.pushPose();
-        rotateAroundPivot(poseStack, state.yaw, 0.0f);
+        rotateAroundPivot(poseStack, state.displayYaw, 0.0f);
         state.turret.submit(poseStack, collector, state.lightCoords, OverlayTexture.NO_OVERLAY, 0);
         poseStack.popPose();
     }
 
     private static void submitBarrel(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
         poseStack.pushPose();
-        rotateAroundPivot(poseStack, state.yaw, state.pitch);
+        rotateAroundPivot(poseStack, state.displayYaw, state.displayPitch);
+        poseStack.translate(0.0, 0.0, -state.recoil);
         state.barrel.submit(poseStack, collector, state.lightCoords, OverlayTexture.NO_OVERLAY, 0);
         poseStack.popPose();
     }
 
     private static void submitEnergy(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
         poseStack.pushPose();
-        rotateAroundPivot(poseStack, state.yaw, state.pitch);
+        rotateAroundPivot(poseStack, state.displayYaw, state.displayPitch);
+        poseStack.translate(0.0, 0.0, -state.recoil);
+        poseStack.translate(PIVOT_X, PIVOT_Y, PIVOT_Z);
+        poseStack.scale(state.energyPulse, state.energyPulse, 1.0f);
+        poseStack.translate(-PIVOT_X, -PIVOT_Y, -PIVOT_Z);
         state.energyChannel.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
         poseStack.popPose();
     }
@@ -129,9 +166,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         double dy = state.targetY - PIVOT_Y;
         double dz = state.targetZ - PIVOT_Z;
         double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (length < 1.0e-5) {
-            return;
-        }
+        if (length < 1.0e-5) return;
 
         double nx = dx / length;
         double ny = dy / length;
@@ -145,10 +180,15 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         double y = lerp(muzzleY, state.targetY, p) + Math.sin(Math.PI * p) * 0.32;
         double z = lerp(muzzleZ, state.targetZ, p);
 
-        final float scale = 0.38f;
+        float materialize = clamp01(state.projectileProgress * 3.0f);
+        float scale = 0.26f + 0.12f * smoothStep(materialize);
+
         poseStack.pushPose();
-        poseStack.translate(x - scale * 0.5, y - scale * 0.5, z - scale * 0.5);
+        poseStack.translate(x, y, z);
+        poseStack.mulPose(Axis.YP.rotationDegrees(360.0f * p));
+        poseStack.mulPose(Axis.XP.rotationDegrees(90.0f * p));
         poseStack.scale(scale, scale, scale);
+        poseStack.translate(-0.5, -0.5, -0.5);
         state.projectile.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
         poseStack.popPose();
     }
@@ -158,6 +198,18 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         poseStack.mulPose(Axis.YP.rotationDegrees(yaw));
         poseStack.mulPose(Axis.XP.rotationDegrees(pitch));
         poseStack.translate(-PIVOT_X, -PIVOT_Y, -PIVOT_Z);
+    }
+
+    private static float approachAngle(float current, float target, float factor) {
+        float delta = wrapDegrees(target - current);
+        return current + delta * factor;
+    }
+
+    private static float wrapDegrees(float value) {
+        value %= 360.0f;
+        if (value <= -180.0f) value += 360.0f;
+        if (value > 180.0f) value -= 360.0f;
+        return value;
     }
 
     private static float homeYaw(Direction facing) {

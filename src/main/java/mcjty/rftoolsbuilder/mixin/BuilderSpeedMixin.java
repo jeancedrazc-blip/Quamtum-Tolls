@@ -7,11 +7,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(targets = "mcjty.rftoolsbuilder.BuilderBlockEntity")
+@Mixin(targets = "mcjty.rftoolsbuilder.BuilderBlockEntity", remap = false)
 public abstract class BuilderSpeedMixin {
     private static final int WORK_INTERVAL_TICKS = 4;
 
-    @Inject(method = "work", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "work", at = @At("HEAD"), cancellable = true, remap = false)
     private void quantumtools$limitMiningRate(CallbackInfo ci) {
         BlockEntity self = (BlockEntity) (Object) this;
         Level level = self.getLevel();

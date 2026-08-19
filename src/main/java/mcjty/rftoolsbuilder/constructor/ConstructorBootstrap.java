@@ -1,8 +1,8 @@
 package mcjty.rftoolsbuilder.constructor;
 
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.level.block.Block;
@@ -21,7 +21,7 @@ public final class ConstructorBootstrap {
     public static final String MOD_ID = "rftoolsbuilder";
     private static final ResourceKey<CreativeModeTab> MAIN_TAB = ResourceKey.create(
             Registries.CREATIVE_MODE_TAB,
-            ResourceLocation.fromNamespaceAndPath(MOD_ID, "main")
+            Identifier.fromNamespaceAndPath(MOD_ID, "main")
     );
 
     private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(MOD_ID);

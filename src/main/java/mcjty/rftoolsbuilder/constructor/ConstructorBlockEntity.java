@@ -3,12 +3,12 @@ package mcjty.rftoolsbuilder.constructor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
@@ -32,6 +32,8 @@ public final class ConstructorBlockEntity extends BlockEntity {
     private int phaseTick;
     private int shotProgress;
     private boolean running;
+    /** True after one material + FE for the current shot were consumed. */
+    private boolean shotReserved;
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
         super(ConstructorBootstrap.CONSTRUCTOR_BLOCK_ENTITY.get(), pos, state);
@@ -42,10 +44,7 @@ public final class ConstructorBlockEntity extends BlockEntity {
     public BlockPos targetPos() { return targetPos; }
     public BlockState targetState() { return targetState; }
     public int shotProgress() { return shotProgress; }
-
-    public Component statusMessage() {
-        return Component.literal("Constructor: " + status.name() + " | " + energy.getEnergyStored() + "/" + energy.getMaxEnergyStored() + " FE");
-    }
+    public boolean shotReserved() { return shotReserved; }
 
     public boolean queuePlacement(BlockPos target, BlockState state) {
         if (target == null || state == null || target.equals(worldPosition)) return false;
@@ -54,6 +53,7 @@ public final class ConstructorBlockEntity extends BlockEntity {
         this.targetState = state;
         this.phaseTick = 0;
         this.shotProgress = 0;
+        this.shotReserved = false;
         this.running = true;
         this.status = ConstructorStatus.READY;
         setChangedAndSync();
@@ -88,14 +88,39 @@ public final class ConstructorBlockEntity extends BlockEntity {
             return;
         }
 
-        int cost = energyCost(targetPos, targetState);
-        if (energy.getEnergyStored() < cost) {
-            transition(ConstructorStatus.WAITING_ENERGY);
-            return;
+        if (!shotReserved) {
+            BlockState current = level.getBlockState(targetPos);
+            if (current == targetState || current.equals(targetState)) {
+                finishWithoutShot();
+                return;
+            }
+            // Initial world policy is AIR_ONLY. Other policies are added by the plan/job layer.
+            if (!current.isAir() || !targetState.canSurvive(level, targetPos)) {
+                running = false;
+                transition(ConstructorStatus.BLOCKED);
+                return;
+            }
+
+            if (!ConstructorMaterialAccess.isRepresentable(targetState)) {
+                running = false;
+                transition(ConstructorStatus.BLOCKED);
+                return;
+            }
+
+            int cost = energyCost(targetPos, targetState);
+            if (energy.getEnergyStored() < cost) {
+                transition(ConstructorStatus.WAITING_ENERGY);
+                return;
+            }
+
+            if (!ConstructorMaterialAccess.hasOne(level, worldPosition, targetState)) {
+                transition(ConstructorStatus.WAITING_MATERIAL);
+                return;
+            }
         }
 
         switch (status) {
-            case READY, WAITING_ENERGY, WAITING_CHUNK -> {
+            case READY, WAITING_ENERGY, WAITING_MATERIAL, WAITING_CHUNK -> {
                 phaseTick = 0;
                 transition(ConstructorStatus.AIMING);
             }
@@ -107,7 +132,9 @@ public final class ConstructorBlockEntity extends BlockEntity {
             }
             case CHARGING -> {
                 if (++phaseTick >= CHARGE_TICKS) {
-                    energy.consume(cost);
+                    if (!shotReserved && !reserveShot(level)) {
+                        return;
+                    }
                     phaseTick = 0;
                     shotProgress = 0;
                     transition(ConstructorStatus.FIRING);
@@ -116,7 +143,7 @@ public final class ConstructorBlockEntity extends BlockEntity {
             case FIRING -> {
                 shotProgress++;
                 if (++phaseTick >= FLIGHT_TICKS) {
-                    completeShot();
+                    completeShot(level);
                 } else {
                     syncClientState();
                 }
@@ -125,13 +152,58 @@ public final class ConstructorBlockEntity extends BlockEntity {
         }
     }
 
-    private void completeShot() {
-        // Foundation milestone: FE transaction + aim/charge/fire timing are operational.
-        // The normalized schematic/material transaction will perform authoritative placement here.
+    private boolean reserveShot(ServerLevel level) {
+        int cost = energyCost(targetPos, targetState);
+        if (energy.getEnergyStored() < cost) {
+            transition(ConstructorStatus.WAITING_ENERGY);
+            return false;
+        }
+        // Extract material first. FE is consumed only after the item transaction commits.
+        if (!ConstructorMaterialAccess.extractOne(level, worldPosition, targetState)) {
+            transition(ConstructorStatus.WAITING_MATERIAL);
+            return false;
+        }
+        energy.consume(cost);
+        shotReserved = true;
+        setChangedAndSync();
+        return true;
+    }
+
+    private void completeShot(ServerLevel level) {
+        BlockState current = level.getBlockState(targetPos);
+        if (!current.isAir() || !targetState.canSurvive(level, targetPos)) {
+            // Keep the material/energy reservation attached to this shot. Resume after the obstruction
+            // is fixed without charging a second time.
+            running = false;
+            status = ConstructorStatus.BLOCKED;
+            phaseTick = 0;
+            shotProgress = FLIGHT_TICKS;
+            setChangedAndSync();
+            return;
+        }
+
+        if (!level.setBlock(targetPos, targetState, Block.UPDATE_ALL)) {
+            running = false;
+            status = ConstructorStatus.ERROR;
+            phaseTick = 0;
+            setChangedAndSync();
+            return;
+        }
+
+        shotReserved = false;
         status = ConstructorStatus.COMPLETE;
         running = false;
         phaseTick = 0;
         shotProgress = FLIGHT_TICKS;
+        setChangedAndSync();
+    }
+
+    private void finishWithoutShot() {
+        shotReserved = false;
+        status = ConstructorStatus.COMPLETE;
+        running = false;
+        phaseTick = 0;
+        shotProgress = 0;
         setChangedAndSync();
     }
 
@@ -177,6 +249,7 @@ public final class ConstructorBlockEntity extends BlockEntity {
         output.putInt("Energy", energy.getEnergyStored());
         output.putInt("Status", status.ordinal());
         output.putBoolean("Running", running);
+        output.putBoolean("ShotReserved", shotReserved);
         output.putInt("PhaseTick", phaseTick);
         output.putInt("ShotProgress", shotProgress);
         if (targetPos != null) output.putLong("TargetPos", targetPos.asLong());
@@ -190,6 +263,7 @@ public final class ConstructorBlockEntity extends BlockEntity {
         int s = input.getIntOr("Status", ConstructorStatus.IDLE.ordinal());
         status = ConstructorStatus.values()[Math.max(0, Math.min(ConstructorStatus.values().length - 1, s))];
         running = input.getBooleanOr("Running", false);
+        shotReserved = input.getBooleanOr("ShotReserved", false);
         phaseTick = Math.max(0, input.getIntOr("PhaseTick", 0));
         shotProgress = Math.max(0, input.getIntOr("ShotProgress", 0));
         long packed = input.getLongOr("TargetPos", Long.MIN_VALUE);

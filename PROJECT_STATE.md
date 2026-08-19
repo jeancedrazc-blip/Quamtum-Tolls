@@ -33,11 +33,26 @@ Before changing Quantum Tools in any conversation:
 - Projectile renders the full target BlockState model/texture.
 - Neutral `ConstructionPlan` execution layer, independent of schematic source.
 - Block substitution is required (example cobblestone -> smooth stone).
-- Planned real schematic adapters include Create and `.schem`; those readers are not complete in dev.4.
+- Planned real schematic adapters include Create and `.schem`; those readers are not complete yet.
 
 ### Constructor visual correction after dev.3 runtime test
 
-The dev.3 runtime model was rejected because the barrel rotated around a pivot only about half a block above the floor. The current branch raises the pivot/trunnion and aligns turret, barrel and cyan energy channel with the approved cannon silhouette. This change must be preserved and visually re-tested in dev.4.
+The dev.3 runtime model was rejected because the barrel rotated around a pivot only about half a block above the floor. The current branch raises the pivot/trunnion and aligns turret, barrel and cyan energy channel with the approved cannon silhouette. Preserve this raised configuration.
+
+### Constructor UI + animation — dev.5
+
+Implemented and CI-validated after the dev.4 runtime test build:
+
+- right-click now opens a dedicated Constructor control UI; the old temporary cobblestone click trigger is removed;
+- UI shows FE stored/capacity, machine status, schematic/job progress, current target block, target XYZ, current FE cost per shot and firing progress;
+- UI exposes `PAUSE / RESUME` and safe `CLEAR` controls;
+- CLEAR refuses while a shot already has FE + material reserved, preventing silent resource deletion;
+- turret yaw and barrel pitch interpolate smoothly toward the exact target;
+- subtle standby motion only when idle/complete/paused;
+- cyan energy channel remains visible and pulses during charging, firing and low-energy wait states;
+- barrel has physical recoil on firing;
+- projectile remains the full target BlockState model/texture, materializes from smaller scale, follows an arc, and rotates in flight;
+- authoritative block placement remains server-side and happens only when the projectile reaches the target.
 
 ## Schematic Table — approved concept and dev.4 implementation
 
@@ -59,9 +74,9 @@ Implemented in **3.0.6-dev.4**:
 - UI buttons for rotation, mirror, offset, preview/test, save mapping, clear mappings and send;
 - nearest Constructor lookup within 16 horizontal blocks / 5 vertical blocks;
 - SEND converts the current test schematic into the existing `ConstructionPlan` engine and applies the card's transformations/replacements before starting the Constructor;
-- the current PREVIEW/SEND source is intentionally a deterministic 5x3 test wall (cobblestone border + stone center) so energy, materials, aiming, placement, transformations and substitution can be runtime-tested before real Create/`.schem` readers are attached.
+- current PREVIEW/SEND source is intentionally a deterministic 5x3 test wall (cobblestone border + stone center) so energy, materials, aiming, placement, transformations and substitution can be runtime-tested before real Create/`.schem` readers are attached.
 
-Important: dev.4 does **not** yet claim real Create schematic or `.schem` file loading. The table/card/execution pipeline is now testable; format readers are the next integration layer.
+Important: real Create schematic or `.schem` file loading is not yet implemented. The table/card/execution pipeline is testable first; format readers are the next integration layer.
 
 ## Miner — approved Concept 1 visual
 
@@ -90,22 +105,22 @@ All existing card textures plus the Schematic Card use the approved family:
 - function-specific accent colors/icons;
 - redesigned files: Shape Card, Quarry, Clear Quarry, Fortune, Clear Fortune, Silk, Clear Silk and Schematic Card.
 
-## Current development checkpoint — 3.0.6-dev.4
+## Current development checkpoint — 3.0.6-dev.5
 
 Development branch: `agent/constructor-foundation`
 Draft PR: #1
 
-Code commit validated by GitHub Actions (Java 25 / NeoForge 26.1.2.95):
+Constructor UI/animation commit validated by GitHub Actions (Java 25 / NeoForge 26.1.2.95):
 
-`35e21a650243e5bc47b9a45adbbcd2a76002f07f`
+`9166888d086a41e8e16b69f6f52a26a188a4e13c`
 
 Validated merged development JAR SHA-256:
 
-`aeba1e53325c5ee94be74b870d82fa2275fbce625b9a807f99b9ec45d5a9c913`
+`5093e8d35d56d0f224c627aa520b6a479f1d92f58e531d146a293d0d1541e9a2`
 
-JAR build label: **3.0.6-dev.4**
+JAR build label: **3.0.6-dev.5**
 
-The JAR was built by overlaying the CI-validated branch patch over the existing dev.3 JAR (which itself preserves the verified 3.0.5 baseline), merging translations by key, retaining `quantumtools.mixins.json`, and replacing the corrected Constructor/card/table resources.
+The dev.5 JAR is built by overlaying the CI-validated patch over dev.4, preserving the verified 3.0.5 lineage, existing Miner/table/cards, translations and `quantumtools.mixins.json`.
 
 ## Binary baseline storage note
 

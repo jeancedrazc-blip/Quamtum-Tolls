@@ -1,0 +1,57 @@
+QUANTUM TOOLS 3.0.6-dev.9 — PLACEMENT EDITOR VALIDATION
+Date: 2026-08-20
+Status: COMPILED / READY FOR IN-GAME VALIDATION
+
+SOURCE BRANCH
+source/3.0.6-dev.9-placement-editor
+
+VALIDATION PR
+#4 — draft. Do not merge before in-game approval.
+
+IMPLEMENTED
+- Removed schematic key mappings from ConstructorClient/SchematicPlacementHandler.
+- Written Schematic Card opens Placement Editor through right mouse interaction.
+- Anchor is sampled initially and then remains locked until an explicit UI action.
+- X/Y/Z adjustment: -10, -1, +1, +10.
+- Rotation: 0, 90, 180, 270 degrees.
+- Mirror: none, left/right, front/back.
+- Explicit place-at-look action.
+- Place-in-front action.
+- Center-on-player action.
+- Reset transform.
+- Confirm deployment.
+- Cancel without destroying previous saved deployment.
+- Clear deployment.
+- UI displays anchor, schematic size, rotation, mirror and preview state.
+- Hologram uses the live editor transform while the screen is open.
+
+BUILD GATE
+GitHub Actions PR run 32356764733: SUCCESS.
+The source project compiled successfully against Minecraft 26.1.2 / NeoForge 26.1.2.95.
+
+APPROVED CONSTRUCTOR MODEL
+Constructor V5 remains FROZEN.
+The build pipeline restores and verifies every approved V5 Constructor asset by SHA-256 before compiling.
+
+FULL TEST JAR ASSEMBLY
+The complete approved V5 JAR was used as the binary base. Only the Placement Editor classes and localization files were patched; mod metadata version was changed from 3.0.6-dev.8 to 3.0.6-dev.9.
+
+Changed existing entries:
+- mcjty/rftoolsbuilder/constructor/client/ConstructorClient.class
+- mcjty/rftoolsbuilder/constructor/client/SchematicPlacementHandler.class
+- assets/rftoolsbuilder/lang/en_us.json
+- assets/rftoolsbuilder/lang/pt_br.json
+- META-INF/neoforge.mods.toml (version only)
+
+Added entry:
+- mcjty/rftoolsbuilder/constructor/client/SchematicPlacementScreen.class
+
+Removed entries: NONE
+Unexpected modified entries: NONE
+Class count: 86 (V5 had 85; the new Placement Screen adds one class)
+ZIP/JAR integrity: PASS
+Final full test JAR SHA-256:
+61ebc56572ae67616493552ce67f77626c9c26cbd36f05555679e017f25e3955
+
+NEXT GATE
+The Placement Editor is not considered user-approved until tested in Minecraft. If the in-game test exposes any error, remain on this same stage and fix it before beginning the next schematic problem.

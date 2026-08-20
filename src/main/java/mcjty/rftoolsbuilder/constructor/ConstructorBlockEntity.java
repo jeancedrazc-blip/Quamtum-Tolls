@@ -5,26 +5,32 @@ import mcjty.rftoolsbuilder.constructor.plan.ConstructionJob;
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.transfer.energy.SimpleEnergyHandler;
 
-public final class ConstructorBlockEntity extends BlockEntity implements MenuProvider {
+import java.io.IOException;
+
+public final class ConstructorBlockEntity extends BlockEntity implements MenuProvider, Container {
     public static final int ENERGY_CAPACITY = 5_000_000;
     public static final int MAX_RECEIVE = 250_000;
     public static final int BASE_PLACEMENT_COST = 1_000;
@@ -33,8 +39,10 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
     public static final int AIM_TICKS = 4;
     public static final int CHARGE_TICKS = 5;
     public static final int FLIGHT_TICKS = 8;
+    public static final int SLOT_SCHEMATIC = 0;
 
     private final ConstructorEnergyStorage energy = new ConstructorEnergyStorage(ENERGY_CAPACITY, MAX_RECEIVE);
+    private final NonNullList<ItemStack> items = NonNullList.withSize(1, ItemStack.EMPTY);
     private ConstructorStatus status = ConstructorStatus.IDLE;
     private BlockPos targetPos;
     private BlockState targetState;
@@ -56,6 +64,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
                 case 5 -> shotProgress;
                 case 6 -> running ? 1 : 0;
                 case 7 -> currentEnergyCost();
+                case 8 -> SchematicCardItem.hasSource(schematicCard()) ? 1 : 0;
                 default -> 0;
             };
         }
@@ -66,7 +75,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
 
         @Override
         public int getCount() {
-            return 8;
+            return 9;
         }
     };
 
@@ -82,6 +91,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
     public boolean shotReserved() { return shotReserved; }
     public boolean isRunning() { return running; }
     public ContainerData menuData() { return menuData; }
+    public ItemStack schematicCard() { return items.get(SLOT_SCHEMATIC); }
     public int jobIndex() { return activeJob == null ? 0 : activeJob.index(); }
     public int jobTotal() { return activeJob == null ? (targetPos == null ? 0 : 1) : activeJob.total(); }
     public float jobProgress() { return activeJob == null ? (status == ConstructorStatus.COMPLETE ? 1.0f : 0.0f) : activeJob.progress(); }
@@ -112,6 +122,33 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         }
         prepareTarget(activeJob.currentWorldPos(), activeJob.currentTargetState());
         return true;
+    }
+
+    public boolean startCardPlan() {
+        if (!(level instanceof ServerLevel)) return false;
+        ItemStack card = schematicCard();
+        if (!(card.getItem() instanceof SchematicCardItem) || !SchematicCardItem.hasSource(card)) return false;
+        if (running && status != ConstructorStatus.COMPLETE && status != ConstructorStatus.ERROR) return false;
+
+        try {
+            ConstructionPlan plan = SchematicPlanLoader.loadCard(card);
+            if (plan.size() <= 0) {
+                status = ConstructorStatus.ERROR;
+                setChangedAndSync();
+                return false;
+            }
+            BlockSubstitutionRules rules = new BlockSubstitutionRules();
+            SchematicCardItem.applyReplacements(card, rules);
+            BlockPos origin = worldPosition
+                    .relative(getBlockState().getValue(BlockStateProperties.HORIZONTAL_FACING), 4)
+                    .offset(SchematicCardItem.offsetX(card), SchematicCardItem.offsetY(card), SchematicCardItem.offsetZ(card));
+            return startPlan(plan, origin, rules);
+        } catch (IOException | RuntimeException ignored) {
+            running = false;
+            status = ConstructorStatus.ERROR;
+            setChangedAndSync();
+            return false;
+        }
     }
 
     private void prepareTarget(BlockPos target, BlockState state) {
@@ -161,6 +198,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
                 yield true;
             }
             case 1 -> clearJob();
+            case 2 -> startCardPlan();
             default -> false;
         };
     }
@@ -221,9 +259,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
             }
             case CHARGING -> {
                 if (++phaseTick >= CHARGE_TICKS) {
-                    if (!shotReserved && !reserveShot(level)) {
-                        return;
-                    }
+                    if (!shotReserved && !reserveShot(level)) return;
                     phaseTick = 0;
                     shotProgress = 0;
                     transition(ConstructorStatus.FIRING);
@@ -231,11 +267,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
             }
             case FIRING -> {
                 shotProgress++;
-                if (++phaseTick >= FLIGHT_TICKS) {
-                    completeShot(level);
-                } else {
-                    syncClientState();
-                }
+                if (++phaseTick >= FLIGHT_TICKS) completeShot(level); else syncClientState();
             }
             default -> { }
         }
@@ -357,6 +389,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         output.putInt("ShotProgress", shotProgress);
         if (targetPos != null) output.putLong("TargetPos", targetPos.asLong());
         if (targetState != null) output.store("TargetState", BlockState.CODEC, targetState);
+        if (!schematicCard().isEmpty()) output.store("SchematicCard", ItemStack.CODEC, schematicCard());
     }
 
     @Override
@@ -372,6 +405,46 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         long packed = input.getLongOr("TargetPos", Long.MIN_VALUE);
         targetPos = packed == Long.MIN_VALUE ? null : BlockPos.of(packed);
         targetState = input.read("TargetState", BlockState.CODEC).orElse(null);
+        items.set(SLOT_SCHEMATIC, input.read("SchematicCard", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+    }
+
+    @Override public int getContainerSize() { return 1; }
+    @Override public boolean isEmpty() { return schematicCard().isEmpty(); }
+    @Override public ItemStack getItem(int slot) { return slot == SLOT_SCHEMATIC ? schematicCard() : ItemStack.EMPTY; }
+
+    @Override
+    public ItemStack removeItem(int slot, int amount) {
+        if (slot != SLOT_SCHEMATIC) return ItemStack.EMPTY;
+        ItemStack stack = schematicCard();
+        if (stack.isEmpty()) return ItemStack.EMPTY;
+        ItemStack result = stack.split(amount);
+        if (stack.isEmpty()) items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
+        setChangedAndSync();
+        return result;
+    }
+
+    @Override
+    public ItemStack removeItemNoUpdate(int slot) {
+        if (slot != SLOT_SCHEMATIC) return ItemStack.EMPTY;
+        ItemStack result = schematicCard();
+        items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
+        return result;
+    }
+
+    @Override
+    public void setItem(int slot, ItemStack stack) {
+        if (slot != SLOT_SCHEMATIC) return;
+        items.set(SLOT_SCHEMATIC, stack);
+        if (!stack.isEmpty() && stack.getCount() > 1) stack.setCount(1);
+        setChangedAndSync();
+    }
+
+    @Override public boolean stillValid(Player player) { return Container.stillValidBlockEntity(this, player); }
+
+    @Override
+    public void clearContent() {
+        items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
+        setChangedAndSync();
     }
 
     public static final class ConstructorEnergyStorage extends SimpleEnergyHandler {

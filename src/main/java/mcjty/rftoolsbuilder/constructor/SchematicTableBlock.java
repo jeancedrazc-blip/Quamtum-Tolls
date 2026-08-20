@@ -9,6 +9,7 @@ import net.minecraft.world.Containers;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
@@ -19,9 +20,20 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 public final class SchematicTableBlock extends HorizontalDirectionalBlock implements EntityBlock {
     public static final MapCodec<SchematicTableBlock> CODEC = simpleCodec(SchematicTableBlock::new);
+
+    private static final VoxelShape TABLE_SHAPE = Shapes.or(
+            box(0, 9.5, 0, 16, 14, 16),
+            box(0.5, 0, 0.5, 4.5, 10, 4.5),
+            box(11.5, 0, 0.5, 15.5, 10, 4.5),
+            box(0.5, 0, 11.5, 4.5, 10, 15.5),
+            box(11.5, 0, 11.5, 15.5, 10, 15.5)
+    );
 
     public SchematicTableBlock(Properties properties) {
         super(properties);
@@ -41,6 +53,11 @@ public final class SchematicTableBlock extends HorizontalDirectionalBlock implem
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, context.getHorizontalDirection().getOpposite());
+    }
+
+    @Override
+    protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return TABLE_SHAPE;
     }
 
     @Override
@@ -64,9 +81,7 @@ public final class SchematicTableBlock extends HorizontalDirectionalBlock implem
     }
 
     private InteractionResult open(Level level, BlockPos pos, Player player) {
-        if (level.isClientSide()) {
-            return InteractionResult.SUCCESS;
-        }
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
         if (level.getBlockEntity(pos) instanceof SchematicTableBlockEntity table) {
             player.openMenu(table, buffer -> buffer.writeBlockPos(pos));
             return InteractionResult.SUCCESS;

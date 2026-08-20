@@ -160,9 +160,9 @@ public final class SchematicUploadManager {
             if (!actual.equals(session.expectedHash)) throw new IOException("SHA-256 checksum mismatch");
 
             Files.move(session.tempPath, session.finalPath, StandardCopyOption.REPLACE_EXISTING);
-            ConstructionPlan plan = SchematicPlanLoader.load(new SchematicFolderIndex.Entry(session.relativeFinalPath, session.format), false);
-            if (plan.size() <= 0 || plan.sizeX() <= 0 || plan.sizeY() <= 0 || plan.sizeZ() <= 0) {
-                throw new IOException("Schematic contains no printable block bounds");
+            ConstructionPlan plan = UniversalSchematicLoader.load(new SchematicFolderIndex.Entry(session.relativeFinalPath, session.format), false);
+            if (plan.totalTargets() <= 0 || plan.sizeX() <= 0 || plan.sizeY() <= 0 || plan.sizeZ() <= 0) {
+                throw new IOException("Schematic contains no printable targets or bounds");
             }
 
             table.finishUpload(session.displayName, session.relativeFinalPath, session.clientRelativeFile,

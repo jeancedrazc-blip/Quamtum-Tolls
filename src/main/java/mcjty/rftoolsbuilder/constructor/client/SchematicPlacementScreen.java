@@ -90,7 +90,7 @@ public final class SchematicPlacementScreen extends Screen {
         context(SchematicPlacementTool.MIRROR, left + 110, top + 53, 92, "NONE", () -> SchematicPlacementHandler.setMirror(0));
         context(SchematicPlacementTool.MIRROR, left + 206, top + 53, 100, "MIRROR Z", SchematicPlacementHandler::flipZ);
 
-        // PRECISE: deterministic ±1/±10 adjustment on all three world axes.
+        // PRECISE: deterministic ±1/±10 adjustment plus a full exact-coordinate editor.
         context(SchematicPlacementTool.PRECISE, left + 14, top + 53, 48, "X-10", () -> SchematicPlacementHandler.nudge(-10, 0, 0));
         context(SchematicPlacementTool.PRECISE, left + 65, top + 53, 42, "X-1", () -> SchematicPlacementHandler.nudge(-1, 0, 0));
         context(SchematicPlacementTool.PRECISE, left + 110, top + 53, 42, "X+1", () -> SchematicPlacementHandler.nudge(1, 0, 0));
@@ -103,6 +103,7 @@ public final class SchematicPlacementScreen extends Screen {
         context(SchematicPlacementTool.PRECISE, left + 260, top + 53, 42, "Y-1", () -> SchematicPlacementHandler.nudge(0, -1, 0));
         context(SchematicPlacementTool.PRECISE, left + 209, top + 76, 42, "Y+1", () -> SchematicPlacementHandler.nudge(0, 1, 0));
         context(SchematicPlacementTool.PRECISE, left + 254, top + 76, 48, "Y+10", () -> SchematicPlacementHandler.nudge(0, 10, 0));
+        context(SchematicPlacementTool.PRECISE, left + 310, top + 53, 96, "EXACT XYZ", this::openExactEditor);
 
         // Global controls remain available regardless of tool.
         addRenderableWidget(new QuantumButton(left + dockWidth - 224, top + 100, 50, 18,
@@ -132,6 +133,11 @@ public final class SchematicPlacementScreen extends Screen {
         for (QuantumButton button : contextButtons) {
             button.visible = contextOwners.get(button) == SchematicPlacementHandler.tool();
         }
+    }
+
+    private void openExactEditor() {
+        Minecraft mc = minecraft;
+        if (mc != null) mc.setScreen(new SchematicExactTransformScreen());
     }
 
     private void confirm() {
@@ -180,7 +186,6 @@ public final class SchematicPlacementScreen extends Screen {
         QuantumUiTheme.window(gui, dockLeft, dockTop, dockWidth, DOCK_HEIGHT);
         QuantumUiTheme.title(gui, font, Component.literal("SCHEMATIC TRANSFORM"), dockLeft + dockWidth / 2, dockTop + 7);
 
-        // Compact telemetry module stays away from the center of the world preview.
         int infoX = 8;
         int infoY = 8;
         int infoW = 224;

@@ -6,6 +6,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.GlowItemFrame;
 import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
@@ -15,9 +16,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Public compatibility hook for schematic entity material requirements.
- * Defaults intentionally match Create: item frames and armor stands are
- * supported; unknown entities are INVALID until a compatibility provider says
- * how they are paid for.
+ * Built-in support is deliberately limited to entities that have a complete,
+ * deterministic material cost. Unknown entities are INVALID until a
+ * compatibility provider explicitly defines how they are paid for.
  */
 public final class ConstructorEntityRequirementRegistry {
     @FunctionalInterface
@@ -61,14 +62,18 @@ public final class ConstructorEntityRequirementRegistry {
 
         if (entity instanceof ArmorStand armorStand) {
             ArrayList<ConstructorRequirement.StackRequirement> requirements = new ArrayList<>();
-            requirements.add(new ConstructorRequirement.StackRequirement(new ItemStack(Items.ARMOR_STAND), ConstructorRequirement.Use.CONSUME, false));
+            requirements.add(new ConstructorRequirement.StackRequirement(
+                    new ItemStack(Items.ARMOR_STAND), ConstructorRequirement.Use.CONSUME, false));
             for (ItemStack stack : armorStand.getAllSlots()) {
                 if (!stack.isEmpty()) {
-                    requirements.add(new ConstructorRequirement.StackRequirement(stack.copy(), ConstructorRequirement.Use.CONSUME, true));
+                    requirements.add(new ConstructorRequirement.StackRequirement(
+                            stack.copy(), ConstructorRequirement.Use.CONSUME, true));
                 }
             }
             return new ConstructorRequirement(requirements);
         }
+
+        if (entity instanceof Painting) return ConstructorRequirement.consume(Items.PAINTING, 1);
 
         return ConstructorRequirement.INVALID;
     }

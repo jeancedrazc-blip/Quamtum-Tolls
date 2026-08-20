@@ -22,118 +22,135 @@ Before changing Quantum Tools in any conversation:
 5. Never invent missing changelog entries.
 6. Preserve existing behavior unless an explicit change request says otherwise.
 
-## Constructor — approved direction
+## Constructor — permanent design rules
 
 - Actual machine name must **not** use the word `Quantum`.
 - Dedicated sci-fi cannon/turret, not a generic cube or robotic arm.
 - Long horizontal cannon with white/light metallic armor, gunmetal structure and cyan emissive channel/muzzle.
 - Mechanical center pivot/trunnion above the base; 360-degree horizontal aiming plus vertical elevation toward the exact target block.
 - Compact turret base with splayed stabilizer feet.
-- FE-powered.
+- FE-powered; do not replace FE with the Create Schematicannon gunpowder system.
 - Projectile renders the full target BlockState model/texture.
-- Neutral `ConstructionPlan` execution layer, independent of schematic source.
-- Block substitution is required (example cobblestone -> smooth stone).
-- Planned adapters include Create `.nbt` and other schematic formats such as `.schem` where technically practical.
+- Block placement is authoritative server-side and occurs on projectile impact.
+- Neutral `ConstructionPlan` execution layer must remain independent of schematic source.
+- The Constructor must **not be locked to one schematic format**. File readers are adapters that normalize external formats into `ConstructionPlan`.
+- Block substitution remains a required system (example cobblestone -> smooth stone).
 
-### Constructor visual correction after dev.3 runtime test
+### Approved visual correction
 
-The dev.3 runtime model was rejected because the barrel rotated around a pivot only about half a block above the floor. The current branch raises the pivot/trunnion and aligns turret, barrel and cyan energy channel with the approved cannon silhouette. Preserve this raised configuration.
+The dev.3 runtime model was rejected because the barrel pivot was too low. Preserve the raised trunnion/pivot and approved cannon silhouette from dev.4+.
 
-### Constructor UI + animation — dev.5+
+### Constructor UI + animation
 
-- right-click opens a dedicated Constructor control UI;
-- UI shows FE stored/capacity, machine status, schematic/job progress, current target block, target XYZ, current FE cost per shot and firing progress;
-- UI exposes `START`, `PAUSE / RESUME` and safe `CLEAR` controls;
-- CLEAR refuses while a shot already has FE + material reserved;
+- right-click opens the dedicated Constructor control UI;
+- UI shows FE, status, job progress, current target block, target XYZ, FE cost and firing progress;
+- controls include `START`, `PAUSE / RESUME`, safe `CLEAR`, replacement mode, skip-missing toggle and Block Entity protection/replacement toggle;
 - turret yaw and barrel pitch interpolate smoothly toward the exact target;
-- subtle standby motion only when idle/complete/paused;
-- cyan energy channel remains visible and pulses during charging, firing and low-energy wait states;
-- barrel has physical recoil on firing;
-- projectile remains the full target BlockState model/texture, materializes from smaller scale, follows an arc, and rotates in flight;
-- authoritative block placement remains server-side and happens only when the projectile reaches the target.
+- idle movement is subtle;
+- cyan energy channel pulses during charge/firing/low-FE state;
+- barrel has recoil;
+- projectile materializes, rotates and follows an arc;
+- projectile flight duration scales with target distance instead of using one constant duration.
 
-## Schematic Table — approved workflow, corrected in dev.6
+## Schematic Table — permanent workflow
 
-Approved visual direction remains:
+Approved visual direction:
 
 - real workbench/table silhouette, not a cubic machine;
 - white/light metallic tabletop frame, dark structural legs/frame, cyan holographic/touch surface and small orange accents;
 - same product-family language as Constructor and Miner.
 
-The dev.4 interaction design is **rejected/superseded**. Do not restore the old FROM/TO slots, rotation/mirror/offset controls, PREVIEW/SEND buttons or fixed 5x3 test wall to this table.
+Interaction rule:
 
-Current dev.6 workflow intentionally follows the Create-style schematic-writing concept:
+- the table has **one Schematic Card slot only** plus the normal player inventory;
+- the main panel is a browser for files inside the Minecraft instance `schematics/` directory;
+- it supports selection, scrolling, refresh and `WRITE TO CARD`;
+- it must not restore the rejected dev.4 FROM/TO slots, manual rotation/mirror/offset panel, synthetic preview wall or SEND-to-nearest-Constructor flow;
+- rewriting a card resets stale hidden placement transforms from dev.4.
 
-- the table has **one Schematic Card slot only** (plus the standard player inventory area);
-- it scans the Minecraft instance `schematics/` directory and lists available `.nbt` schematic files;
-- the list has selection, scrolling, refresh and `WRITE TO CARD`;
-- writing stores the selected schematic filename and source type on the Schematic Card;
-- rewriting a card resets stale dev.4 rotation/mirror/offset values to zero;
-- block substitution data remains supported by the card/plan layer but is no longer edited on the Schematic Table;
-- there is no synthetic test-wall SEND path in the normal workflow anymore.
+## Universal schematic pipeline — dev.7
 
-## Schematic Card + Constructor — dev.6 real file flow
+The table recursively scans `schematics/` and currently recognizes these adapters:
 
-- `rftoolsbuilder:schematic_card` can now represent an actual schematic file reference instead of only test/config data;
-- tooltip distinguishes an empty card from a card written with a schematic;
-- Constructor now has its own Schematic Card slot;
-- `START` reads the inserted card and loads the referenced schematic;
-- the Create/vanilla structure-NBT adapter reads the `.nbt` palette and block list, reconstructs BlockStates/properties and normalizes them into `ConstructionPlan` entries;
-- air entries are skipped;
-- the existing Constructor engine then handles materials, FE, aiming, projectile animation and authoritative placement;
-- the inserted card is persisted with the Constructor and is dropped if the machine is broken in survival.
+- `.nbt` — Create / vanilla structure NBT;
+- `.schem` — WorldEdit / Sponge schematic v1-v3;
+- `.litematic` — Litematica;
+- `.schematic` — legacy MCEdit/Schematica, with best-effort vanilla numeric-ID conversion.
 
-### Current schematic-format limitations
+The Schematic Card stores the selected relative filename plus detected format. The Constructor reads the card and dispatches to the corresponding adapter. All adapters normalize to `ConstructionPlan`; adding another format must not require rewriting the Constructor engine.
 
-- dev.6 currently implements the Create/vanilla **compressed `.nbt` structure format** from the local `schematics/` folder;
-- `.schem`/Sponge-style files are not implemented yet;
-- Block Entity NBT payload restoration is not implemented yet; dev.6 reconstructs BlockStates/properties;
-- local/singleplayer/integrated-server flow is the current runtime test target;
-- Create-style client-to-dedicated-server schematic upload/synchronization is **not implemented yet**. Do not claim dedicated-server parity until a payload/upload layer is added and tested.
+Current readers include BlockState properties. Create/vanilla, Sponge and Litematica readers also retain available Block Entity payloads for best-effort restoration after placement through the Minecraft 26.1 `ValueInput` compatibility bridge. A malformed/incompatible Block Entity payload must not abort the remaining schematic.
 
-## Miner — approved Concept 1 visual
+Legacy `.schematic` modded numeric IDs are inherently ambiguous without the original old registry mapping; unknown legacy IDs are skipped rather than guessed as another block.
 
-- Same visual family as Constructor, distinct compact mining silhouette.
+## Create Schematicannon behavior adopted in dev.7
+
+Use the Create Schematicannon as the behavioral reference, while retaining Quantum Tools visuals and FE power:
+
+- materials are sourced through NeoForge item capabilities from inventories on all six adjacent sides, allowing normal and modded inventories to feed the Constructor;
+- missing material pauses the machine by default;
+- `SKIP MISSING` can skip unavailable materials instead;
+- replacement modes mirror the Schematicannon concept: air-only/no replacement, solid-aware replacement, replace-any, and include-air/clear mode;
+- existing Block Entities are protected by default and can be explicitly allowed for replacement;
+- already-correct blocks are skipped;
+- unbreakable targets and unsupported virtual/non-item states are skipped safely;
+- blocks whose support is not ready are deferred to the back of the construction queue and retried after other blocks, instead of failing immediately;
+- duplicate item consumption is avoided for paired/multi-block parts such as upper double-block halves, bed heads and piston heads;
+- FE/material are reserved before firing and the world mutation happens at projectile impact;
+- flight duration uses a distance-based curve similar to the Create Schematicannon projectile rather than a fixed 8-tick shot.
+
+## Current limitations after dev.7
+
+- Runtime validation is still required for representative files of every format; CI validates compilation/API compatibility, not every third-party file variant.
+- Entity spawning from schematic files is not implemented yet; dev.7 focuses on blocks and Block Entity payloads.
+- Create-style client-to-dedicated-server schematic upload/synchronization is not implemented yet. The current file browser targets the local/server `schematics/` directory.
+- Unknown/proprietary future schematic formats require a new adapter; do not claim arbitrary bytes can be understood without a format specification.
+
+## Miner — approved Concept 1
+
+- Same visual family as Constructor, compact mining silhouette.
 - White/light armor over gunmetal chassis, cyan mining/energy core, small orange accents.
-- Front must remain nearly flush; do not restore a large protruding drill/nose.
-- Existing UI, Quarry Cards, hologram, energy and orientation behavior should remain unless explicitly changed.
+- Front remains nearly flush; do not restore the large protruding drill/nose.
+- Preserve existing Miner UI, Quarry Cards, hologram, energy and orientation behavior unless explicitly changed.
 - Pre-redesign 3.0.5 appearance remains a fallback reference if requested.
 
 ## Miner balance
 
 - base work interval: **4 ticks**;
 - ideal maximum approximately **5 mined blocks/second**, reduced from approximately 20/s;
-- implemented by throttling mining `work`, not the whole Block Entity tick.
+- throttle mining `work`, not the whole Block Entity tick.
 
-This remains a gameplay-test value.
+## Cards
 
-## Cards — dev.4 visual redesign implemented
+Approved/implemented visual family:
 
-All existing card textures plus the Schematic Card use the approved family:
-
-- true **32x32 RGBA** textures;
-- visually wider/horizontal card silhouette inside the 32x32 canvas;
+- true 32x32 RGBA textures;
+- visually wider/horizontal silhouette;
 - white/gunmetal casing;
 - cyan central display/emissive language;
 - function-specific accent colors/icons;
-- redesigned files: Shape Card, Quarry, Clear Quarry, Fortune, Clear Fortune, Silk, Clear Silk and Schematic Card.
+- Shape Card, Quarry, Clear Quarry, Fortune, Clear Fortune, Silk, Clear Silk and Schematic Card follow this family.
 
-## Current development checkpoint — 3.0.6-dev.6
+## Current development checkpoint — 3.0.6-dev.7
 
 Development branch: `agent/constructor-foundation`
 Draft PR: #1
 
-Create-style schematic workflow code commit validated by GitHub Actions (Java 25 / NeoForge 26.1.2.95):
+Functional dev.7 code commit validated by GitHub Actions (Java 25 / NeoForge 26.1.2.95):
 
-`478cac278de41377327b25aa78417dd16fd5f9e2`
+`211a9e48b79f87b7ec4073ebf85ca1f8fa5da1fc`
+
+The following branch commit only clarifies comments and does not change dev.7 behavior:
+
+`0517f899aee32111403389c4b989ddafd691d70d`
 
 Validated merged development JAR SHA-256:
 
-`17f4157172fbd17082e145d0a671efd8a861bd04dbd648b3a380a1584b16176f`
+`95502d17101abb0b537bd5ac219be309b20059bc8bfd4d5aa7dceacc05235d66`
 
-JAR build label: **3.0.6-dev.6**
+JAR build label: **3.0.6-dev.7**
 
-The dev.6 JAR is built by overlaying the CI-validated patch over dev.5, preserving the verified 3.0.5 lineage, Constructor animation/UI, Miner, card redesign, translations and `quantumtools.mixins.json`.
+The dev.7 JAR is built by overlaying the CI-validated universal-format/Schematicannon patch over dev.6, preserving the verified 3.0.5 lineage, Constructor approved model/animation, Miner, cards, table resources, translations and `quantumtools.mixins.json`.
 
 ## Binary baseline storage note
 

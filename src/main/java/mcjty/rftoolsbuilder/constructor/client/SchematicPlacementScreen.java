@@ -10,6 +10,7 @@ import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,6 +28,7 @@ public final class SchematicPlacementScreen extends Screen {
 
     private final Map<SchematicPlacementTool, QuantumButton> toolButtons = new EnumMap<>(SchematicPlacementTool.class);
     private final List<QuantumButton> contextButtons = new ArrayList<>();
+    private final Map<QuantumButton, SchematicPlacementTool> contextOwners = new HashMap<>();
     private boolean finished;
 
     public SchematicPlacementScreen() {
@@ -37,6 +39,7 @@ public final class SchematicPlacementScreen extends Screen {
     protected void init() {
         super.init();
         contextButtons.clear();
+        contextOwners.clear();
         toolButtons.clear();
 
         int dockWidth = Math.min(width - 16, 550);
@@ -66,8 +69,10 @@ public final class SchematicPlacementScreen extends Screen {
         context(SchematicPlacementTool.MOVE_XZ, left + 88, top + 53, 70, "X +1", () -> SchematicPlacementHandler.nudgeLocal(1, 0));
         context(SchematicPlacementTool.MOVE_XZ, left + 162, top + 53, 70, "Z -1", () -> SchematicPlacementHandler.nudgeLocal(0, -1));
         context(SchematicPlacementTool.MOVE_XZ, left + 236, top + 53, 70, "Z +1", () -> SchematicPlacementHandler.nudgeLocal(0, 1));
-        context(SchematicPlacementTool.MOVE_XZ, left + 14, top + 76, 144, "X -10 / +10", () -> SchematicPlacementHandler.nudgeLocal(10, 0));
-        context(SchematicPlacementTool.MOVE_XZ, left + 162, top + 76, 144, "Z -10 / +10", () -> SchematicPlacementHandler.nudgeLocal(0, 10));
+        context(SchematicPlacementTool.MOVE_XZ, left + 14, top + 76, 70, "X -10", () -> SchematicPlacementHandler.nudgeLocal(-10, 0));
+        context(SchematicPlacementTool.MOVE_XZ, left + 88, top + 76, 70, "X +10", () -> SchematicPlacementHandler.nudgeLocal(10, 0));
+        context(SchematicPlacementTool.MOVE_XZ, left + 162, top + 76, 70, "Z -10", () -> SchematicPlacementHandler.nudgeLocal(0, -10));
+        context(SchematicPlacementTool.MOVE_XZ, left + 236, top + 76, 70, "Z +10", () -> SchematicPlacementHandler.nudgeLocal(0, 10));
 
         // MOVE Y
         context(SchematicPlacementTool.MOVE_Y, left + 14, top + 53, 70, "Y -10", () -> SchematicPlacementHandler.nudge(0, -10, 0));
@@ -114,8 +119,8 @@ public final class SchematicPlacementScreen extends Screen {
 
     private void context(SchematicPlacementTool owner, int x, int y, int width, String label, Runnable action) {
         QuantumButton button = new QuantumButton(x, y, width, 18, Component.literal(label), action);
-        button.setInactiveMessage(owner.name());
         contextButtons.add(addRenderableWidget(button));
+        contextOwners.put(button, owner);
     }
 
     private void selectTool(SchematicPlacementTool selected) {
@@ -125,8 +130,7 @@ public final class SchematicPlacementScreen extends Screen {
 
     private void updateContextVisibility() {
         for (QuantumButton button : contextButtons) {
-            String owner = button.getInactiveMessage().getString();
-            button.visible = owner.equals(SchematicPlacementHandler.tool().name());
+            button.visible = contextOwners.get(button) == SchematicPlacementHandler.tool();
         }
     }
 

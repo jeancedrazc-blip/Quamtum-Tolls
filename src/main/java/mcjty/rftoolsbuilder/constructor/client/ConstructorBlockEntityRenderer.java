@@ -57,6 +57,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
         blockResolver.update(state.turret, ConstructorBootstrap.CONSTRUCTOR_TURRET_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
         blockResolver.update(state.barrel, ConstructorBootstrap.CONSTRUCTOR_BARREL_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
+        blockResolver.update(state.baseEnergyChannel, ConstructorBootstrap.CONSTRUCTOR_BASE_ENERGY_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
         blockResolver.update(state.energyChannel, ConstructorBootstrap.CONSTRUCTOR_ENERGY_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
 
         BlockPos origin = blockEntity.getBlockPos();
@@ -64,6 +65,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         BlockState targetState = blockEntity.targetState();
         boolean entityTarget = blockEntity.targetIsEntity();
         state.status = blockEntity.status();
+        state.energyActive = blockEntity.isRunning();
         state.hasTarget = target != null && (targetState != null || entityTarget);
         state.projectileVisible = false;
         state.projectileProgress = 0.0f;
@@ -87,7 +89,6 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
         if (state.hasTarget) {
             if (targetState != null) {
-                // Block projectiles always render the real target BlockState model.
                 blockResolver.update(state.projectile, targetState, DISPLAY_CONTEXT);
             } else if (entityTarget) {
                 ItemStack projectileItem = blockEntity.projectileItem();
@@ -130,7 +131,9 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
             state.displayPitch += (desiredPitch - state.displayPitch) * pitchFactor;
         }
 
-        if (state.status == ConstructorStatus.CHARGING) {
+        if (!state.energyActive) {
+            state.energyPulse = 1.0f;
+        } else if (state.status == ConstructorStatus.CHARGING) {
             state.energyPulse = 1.02f + (float) ((Math.sin(time * 1.75) + 1.0) * 0.045);
         } else if (state.status == ConstructorStatus.FIRING) {
             state.energyPulse = 1.10f;
@@ -149,10 +152,16 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
     @Override
     public void submit(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState cameraState) {
+        submitBaseEnergy(state, poseStack, collector);
         submitTurret(state, poseStack, collector);
         submitBarrel(state, poseStack, collector);
         submitEnergy(state, poseStack, collector);
         if (state.projectileVisible && state.hasTarget) submitProjectile(state, poseStack, collector);
+    }
+
+    private static void submitBaseEnergy(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
+        int light = state.energyActive ? FULL_BRIGHT : state.lightCoords;
+        state.baseEnergyChannel.submit(poseStack, collector, light, OverlayTexture.NO_OVERLAY, 0);
     }
 
     private static void submitTurret(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
@@ -177,7 +186,8 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         poseStack.translate(PIVOT_X, PIVOT_Y, PIVOT_Z);
         poseStack.scale(state.energyPulse, state.energyPulse, 1.0f);
         poseStack.translate(-PIVOT_X, -PIVOT_Y, -PIVOT_Z);
-        state.energyChannel.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+        int light = state.energyActive ? FULL_BRIGHT : state.lightCoords;
+        state.energyChannel.submit(poseStack, collector, light, OverlayTexture.NO_OVERLAY, 0);
         poseStack.popPose();
     }
 

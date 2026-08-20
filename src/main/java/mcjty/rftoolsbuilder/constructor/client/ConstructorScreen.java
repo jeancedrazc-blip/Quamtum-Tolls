@@ -44,24 +44,21 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
                 Component.literal("■ STOP"), () -> sendButton(1),
                 () -> false, QuantumUiTheme.RED));
 
-        // Explicit Create-style replacement policy controls. The server retains
-        // the original cyclic protocol; this UI deterministically advances to
-        // the requested policy so old worlds/networking remain compatible.
-        addModeButton(x + 12, y + 171, 57, "AIR ONLY", ConstructorReplaceMode.DONT_REPLACE);
-        addModeButton(x + 72, y + 171, 57, "SOLID", ConstructorReplaceMode.REPLACE_SOLID);
-        addModeButton(x + 132, y + 171, 57, "ANY", ConstructorReplaceMode.REPLACE_ANY);
-        addModeButton(x + 192, y + 171, 68, "+ AIR", ConstructorReplaceMode.REPLACE_EMPTY);
+        addModeButton(x + 12, y + 169, 57, "AIR ONLY", ConstructorReplaceMode.DONT_REPLACE);
+        addModeButton(x + 72, y + 169, 57, "SOLID", ConstructorReplaceMode.REPLACE_SOLID);
+        addModeButton(x + 132, y + 169, 57, "ANY", ConstructorReplaceMode.REPLACE_ANY);
+        addModeButton(x + 192, y + 169, 68, "+ AIR", ConstructorReplaceMode.REPLACE_EMPTY);
 
-        addRenderableWidget(new QuantumButton(x + 12, y + 193, 104, 18,
+        addRenderableWidget(new QuantumButton(x + 12, y + 188, 104, 15,
                 Component.literal("SKIP MISSING"), () -> sendButton(4),
                 () -> menu.data().get(10) != 0, QuantumUiTheme.AMBER));
-        addRenderableWidget(new QuantumButton(x + 120, y + 193, 140, 18,
+        addRenderableWidget(new QuantumButton(x + 120, y + 188, 140, 15,
                 Component.literal("REPLACE BLOCK ENTITIES"), () -> sendButton(5),
                 () -> menu.data().get(11) != 0, QuantumUiTheme.AMBER));
     }
 
     private void addModeButton(int x, int y, int width, String label, ConstructorReplaceMode mode) {
-        addRenderableWidget(new QuantumButton(x, y, width, 18, Component.literal(label),
+        addRenderableWidget(new QuantumButton(x, y, width, 17, Component.literal(label),
                 () -> setReplaceMode(mode), () -> replaceMode(menu.data().get(9)) == mode,
                 QuantumUiTheme.CYAN));
     }
@@ -80,22 +77,22 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         ConstructorStatus state = status(menu.data().get(2));
         boolean hasCard = menu.data().get(8) != 0;
         boolean shotInFlight = state == ConstructorStatus.FIRING;
-        boolean hasTarget = menu.data().get(4) > 0 || state != ConstructorStatus.IDLE;
+        boolean hasJob = menu.data().get(4) > 0 || state != ConstructorStatus.IDLE;
 
-        if (startButton != null) startButton.active = hasCard && !shotInFlight
-                && state != ConstructorStatus.AIMING && state != ConstructorStatus.CHARGING;
-        if (pauseButton != null) pauseButton.active = hasTarget && state != ConstructorStatus.COMPLETE
-                && state != ConstructorStatus.ERROR;
-        if (stopButton != null) stopButton.active = hasTarget && !shotInFlight;
+        if (startButton != null) {
+            startButton.active = hasCard && !shotInFlight
+                    && state != ConstructorStatus.AIMING && state != ConstructorStatus.CHARGING;
+        }
+        if (pauseButton != null) {
+            pauseButton.active = hasJob && state != ConstructorStatus.COMPLETE && state != ConstructorStatus.ERROR;
+            pauseButton.setMessage(Component.literal(state == ConstructorStatus.PAUSED ? "▶ RESUME" : "Ⅱ PAUSE"));
+        }
+        if (stopButton != null) stopButton.active = hasJob && !shotInFlight;
     }
 
     private void sendButton(int id) {
         Minecraft mc = this.minecraft;
         if (mc != null && mc.gameMode != null) mc.gameMode.handleInventoryButtonClick(menu.containerId, id);
-    }
-
-    private void centered(GuiGraphicsExtractor gui, Component component, int centerX, int y, int color) {
-        gui.text(font, component, centerX - font.width(component) / 2, y, color, false);
     }
 
     @Override
@@ -116,14 +113,14 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         drawTarget(gui, x, y);
 
         QuantumUiTheme.sectionHeader(gui, font, Component.literal("BUILD CONTROL"), x + 12, y + 137, 248);
-        QuantumUiTheme.sectionHeader(gui, font, Component.literal("PLACEMENT POLICY"), x + 12, y + 165, 248);
+        QuantumUiTheme.sectionHeader(gui, font, Component.literal("PLACEMENT POLICY"), x + 12, y + 164, 248);
 
-        // The actual menu slot sits at 112,116. Frame it as a card bay without
-        // changing vanilla inventory semantics.
         QuantumUiTheme.slotFrame(gui, x + 112, y + 116, menu.data().get(8) != 0, QuantumUiTheme.CYAN);
 
-        gui.fill(x + 8, y + 216, x + imageWidth - 8, y + 217, QuantumUiTheme.BORDER_DIM);
-        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 219, QuantumUiTheme.MUTED, false);
+        // Machine controls end at y=203. Keep a hard visual separation before
+        // the first vanilla inventory row at y=208 so widgets never overlap slots.
+        gui.fill(x + 8, y + 204, x + imageWidth - 8, y + 205, QuantumUiTheme.BORDER_DIM);
+        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 196, QuantumUiTheme.MUTED, false);
     }
 
     private void drawEnergy(GuiGraphicsExtractor gui, int x, int y) {
@@ -165,13 +162,15 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         String card = cardName();
         gui.text(font, Component.literal("CARD"), x + 96, y + 108, QuantumUiTheme.MUTED, false);
         gui.text(font, Component.literal(trim(card, 15)), x + 136, y + 108, QuantumUiTheme.TEXT, false);
-        int rules = replacementCount();
-        gui.text(font, Component.literal(rules == 0 ? "no substitution rules" : rules + " substitution rule" + (rules == 1 ? "" : "s")),
-                x + 136, y + 122, rules == 0 ? QuantumUiTheme.MUTED : QuantumUiTheme.AMBER, false);
 
-        int shotPct = Math.min(100, shot * 100 / flightTicks);
-        if (state == ConstructorStatus.FIRING)
+        if (state == ConstructorStatus.FIRING) {
+            int shotPct = Math.min(100, shot * 100 / flightTicks);
             gui.text(font, Component.literal("PROJECTILE " + shotPct + "%"), x + 96, y + 122, QuantumUiTheme.GREEN, false);
+        } else {
+            int rules = replacementCount();
+            gui.text(font, Component.literal(rules == 0 ? "no substitution rules" : rules + " substitution rule" + (rules == 1 ? "" : "s")),
+                    x + 96, y + 122, rules == 0 ? QuantumUiTheme.MUTED : QuantumUiTheme.AMBER, false);
+        }
     }
 
     private void drawTarget(GuiGraphicsExtractor gui, int x, int y) {

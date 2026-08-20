@@ -14,6 +14,9 @@ import java.lang.reflect.Modifier;
  * 26.1 moved BlockEntity deserialization from raw CompoundTag to ValueInput.
  * Keep external schematic BE payload support isolated here so loaders stay
  * format-neutral and a future mapping change only touches this bridge.
+ *
+ * Failure is deliberately non-fatal: an incompatible legacy BE payload must
+ * never abort the block placement or the remainder of the schematic job.
  */
 final class ConstructorBlockEntityDataCompat {
     private ConstructorBlockEntityDataCompat() {}
@@ -37,8 +40,9 @@ final class ConstructorBlockEntityDataCompat {
             if (!ValueInput.class.isAssignableFrom(method.getReturnType()) || method.getParameterCount() != 1) continue;
             Class<?> parameter = method.getParameterTypes()[0];
             if (!parameter.isAssignableFrom(CompoundTag.class)) continue;
-            if (!method.canAccess(Modifier.isStatic(method.getModifiers()) ? null : helper)) method.setAccessible(true);
-            Object result = method.invoke(Modifier.isStatic(method.getModifiers()) ? null : helper, data);
+            Object receiver = Modifier.isStatic(method.getModifiers()) ? null : helper;
+            if (!method.canAccess(receiver)) method.setAccessible(true);
+            Object result = method.invoke(receiver, data);
             if (result instanceof ValueInput input) return input;
         }
         return null;

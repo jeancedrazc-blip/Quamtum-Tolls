@@ -76,8 +76,8 @@ def validate_table_model() -> None:
             for axis, value in zip("XYZ", coords):
                 if not isinstance(value, (int, float)) or value < 0 or value > 16:
                     fail(f"Schematic Table element {idx} {key}.{axis}={value} leaves one-block bounds")
-    # A table must have open space below its top instead of being a full cube.
-    has_leg = any(e.get("from", [99,99,99])[1] <= 1 and e.get("to", [0,0,0])[1] >= 8 for e in elements)
+    # Feet occupy Y 0..1.5, so a valid vertical leg may start immediately above them.
+    has_leg = any(e.get("from", [99,99,99])[1] <= 2 and e.get("to", [0,0,0])[1] >= 8 for e in elements)
     has_top = any(e.get("from", [99,99,99])[1] >= 9 and e.get("to", [0,0,0])[1] >= 12 for e in elements)
     if not has_leg or not has_top:
         fail("Schematic Table geometry does not contain both legs and a raised tabletop")

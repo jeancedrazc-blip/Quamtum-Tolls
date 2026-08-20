@@ -10,6 +10,7 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -114,7 +115,11 @@ public final class ClientSchematicPreviewCache {
             if (receivedBytes != totalBytes) throw new IOException("Preview transfer ended before all bytes arrived");
             String actual = HexFormat.of().formatHex(digest.digest());
             if (!actual.equals(completedHash)) throw new IOException("Preview SHA-256 mismatch");
-            Files.move(tempPath, completedPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            try {
+                Files.move(tempPath, completedPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(tempPath, completedPath, StandardCopyOption.REPLACE_EXISTING);
+            }
             reset(false);
             SchematicPlacementHandler.onPreviewCacheReady(completedHash, completedFormat, completedPath);
         } catch (IOException exception) {

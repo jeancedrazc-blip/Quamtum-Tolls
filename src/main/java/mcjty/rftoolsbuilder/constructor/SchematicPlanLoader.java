@@ -1,5 +1,6 @@
 package mcjty.rftoolsbuilder.constructor;
 
+import mcjty.rftoolsbuilder.constructor.plan.ConstructionEntityEntry;
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionEntry;
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
 import net.minecraft.core.BlockPos;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.phys.Vec3;
 
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
@@ -37,8 +39,12 @@ import java.util.Map;
  * Supported adapters:
  * - Create / vanilla structure .nbt
  * - WorldEdit / Sponge .schem v1-v3
- * - Litematica .litematic
+ * - Litematica .litematic, including multi-region and signed region sizes
  * - legacy MCEdit/Schematica .schematic (best-effort vanilla numeric mapping)
+ *
+ * Declared source bounds are kept independently of non-air contents. This is
+ * important for preview/deploy rotation: removing an empty outer layer must not
+ * silently change the schematic origin or footprint.
  */
 public final class SchematicPlanLoader {
     private static final long MAX_NBT_BYTES = 0x20000000L;
@@ -93,7 +99,6 @@ public final class SchematicPlanLoader {
         CompoundTag root = readCompressed(fileName);
         ListTag paletteTag = root.getListOrEmpty("palette");
         if (paletteTag.isEmpty()) {
-            // Some structure tools wrap the template in a root compound.
             CompoundTag nested = root.getCompoundOrEmpty("Schematic");
             if (!nested.isEmpty()) root = nested;
             paletteTag = root.getListOrEmpty("palette");
@@ -111,17 +116,33 @@ public final class SchematicPlanLoader {
             BlockState state = palette.get(stateIndex);
             if (state.isAir() && !includeAir) continue;
 
-            ListTag pos = blockTag.getListOrEmpty("pos");
-            if (pos.size() < 3) continue;
-            BlockPos relative = new BlockPos(
-                    pos.getInt(0).orElse(0),
-                    pos.getInt(1).orElse(0),
-                    pos.getInt(2).orElse(0)
-            );
+            BlockPos relative = intListPos(blockTag.getListOrEmpty("pos"));
+            if (relative == null) continue;
             CompoundTag blockEntityData = blockTag.getCompoundOrEmpty("nbt");
             entries.add(new ConstructionEntry(relative, state, blockEntityData.isEmpty() ? null : blockEntityData));
         }
-        return new ConstructionPlan(entries);
+
+        List<ConstructionEntityEntry> entities = readVanillaEntities(root.getListOrEmpty("entities"));
+        ListTag size = root.getListOrEmpty("size");
+        if (size.size() >= 3) {
+            int sx = size.getIntOr(0, 0);
+            int sy = size.getIntOr(1, 0);
+            int sz = size.getIntOr(2, 0);
+            checkedVolume(sx, sy, sz, fileName);
+            return new ConstructionPlan(entries, entities, BlockPos.ZERO, sx, sy, sz);
+        }
+        return new ConstructionPlan(entries, entities);
+    }
+
+    private static List<ConstructionEntityEntry> readVanillaEntities(ListTag list) {
+        ArrayList<ConstructionEntityEntry> result = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i) instanceof CompoundTag tag)) continue;
+            Vec3 pos = doubleListPos(tag.getListOrEmpty("pos"));
+            CompoundTag data = tag.getCompoundOrEmpty("nbt");
+            if (pos != null && !data.isEmpty()) result.add(new ConstructionEntityEntry(pos, data));
+        }
+        return result;
     }
 
     // ---------------------------------------------------------------------
@@ -155,7 +176,8 @@ public final class SchematicPlanLoader {
             BlockPos pos = positionFromLinear(width, length, index);
             entries.add(new ConstructionEntry(pos, state, blockEntities.get(pos)));
         }
-        return new ConstructionPlan(entries);
+        List<ConstructionEntityEntry> entities = readSpongeEntities(root.getListOrEmpty("Entities"));
+        return new ConstructionPlan(entries, entities, BlockPos.ZERO, width, height, length);
     }
 
     private static ConstructionPlan loadSpongeV3(String fileName, CompoundTag root, boolean includeAir) throws IOException {
@@ -176,7 +198,8 @@ public final class SchematicPlanLoader {
             BlockPos pos = positionFromLinear(width, length, index);
             entries.add(new ConstructionEntry(pos, state, blockEntities.get(pos)));
         }
-        return new ConstructionPlan(entries);
+        List<ConstructionEntityEntry> entities = readSpongeEntities(root.getListOrEmpty("Entities"));
+        return new ConstructionPlan(entries, entities, BlockPos.ZERO, width, height, length);
     }
 
     private static Map<BlockPos, CompoundTag> readSpongeBlockEntities(ListTag list) {
@@ -184,10 +207,32 @@ public final class SchematicPlanLoader {
         for (int i = 0; i < list.size(); i++) {
             if (!(list.get(i) instanceof CompoundTag tag)) continue;
             BlockPos pos = intArrayPos(tag, "Pos");
-            if (pos == null) {
-                pos = new BlockPos(number(tag, "x", 0), number(tag, "y", 0), number(tag, "z", 0));
-            }
-            result.put(pos, tag.copy());
+            if (pos == null) pos = new BlockPos(number(tag, "x", 0), number(tag, "y", 0), number(tag, "z", 0));
+
+            CompoundTag data = tag.getCompoundOrEmpty("Data");
+            data = data.isEmpty() ? tag.copy() : data.copy();
+            String id = tag.getString("Id").orElse(tag.getString("id").orElse(""));
+            if (!id.isBlank()) data.putString("id", id);
+            data.remove("Pos");
+            result.put(pos, data);
+        }
+        return result;
+    }
+
+    private static List<ConstructionEntityEntry> readSpongeEntities(ListTag list) {
+        ArrayList<ConstructionEntityEntry> result = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i) instanceof CompoundTag tag)) continue;
+            Vec3 pos = doubleListPos(tag.getListOrEmpty("Pos"));
+            if (pos == null) pos = doubleListPos(tag.getListOrEmpty("pos"));
+            if (pos == null) continue;
+
+            CompoundTag data = tag.getCompoundOrEmpty("Data");
+            data = data.isEmpty() ? tag.copy() : data.copy();
+            String id = tag.getString("Id").orElse(tag.getString("id").orElse(""));
+            if (!id.isBlank()) data.putString("id", id);
+            data.remove("Pos");
+            result.add(new ConstructionEntityEntry(pos, data));
         }
         return result;
     }
@@ -202,6 +247,11 @@ public final class SchematicPlanLoader {
         if (regions.isEmpty()) throw new IOException("Litematic has no Regions: " + fileName);
 
         LinkedHashMap<BlockPos, ConstructionEntry> byPosition = new LinkedHashMap<>();
+        ArrayList<ConstructionEntityEntry> entities = new ArrayList<>();
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+        boolean hasDeclaredBounds = false;
+
         for (String regionName : regions.keySet()) {
             CompoundTag region = regions.getCompoundOrEmpty(regionName);
             if (region.isEmpty()) continue;
@@ -213,35 +263,44 @@ public final class SchematicPlanLoader {
             int sz = Math.abs(signedSize.getZ());
             int volume = checkedVolume(sx, sy, sz, fileName + "/" + regionName);
 
-            List<BlockState> palette = readCompoundPalette(region.getListOrEmpty("BlockStatePalette"));
-            if (palette.isEmpty()) continue;
-            long[] packed = longs(region, "BlockStates");
-            if (packed.length == 0) continue;
-            int bits = Math.max(2, 32 - Integer.numberOfLeadingZeros(Math.max(1, palette.size() - 1)));
-
-            Map<BlockPos, CompoundTag> blockEntities = readLitematicBlockEntities(region.getListOrEmpty("TileEntities"));
             int signX = signedSize.getX() < 0 ? -1 : 1;
             int signY = signedSize.getY() < 0 ? -1 : 1;
             int signZ = signedSize.getZ() < 0 ? -1 : 1;
+            BlockPos regionEnd = regionPos.offset(signX * (sx - 1), signY * (sy - 1), signZ * (sz - 1));
+            minX = Math.min(minX, Math.min(regionPos.getX(), regionEnd.getX()));
+            minY = Math.min(minY, Math.min(regionPos.getY(), regionEnd.getY()));
+            minZ = Math.min(minZ, Math.min(regionPos.getZ(), regionEnd.getZ()));
+            maxX = Math.max(maxX, Math.max(regionPos.getX(), regionEnd.getX()));
+            maxY = Math.max(maxY, Math.max(regionPos.getY(), regionEnd.getY()));
+            maxZ = Math.max(maxZ, Math.max(regionPos.getZ(), regionEnd.getZ()));
+            hasDeclaredBounds = true;
 
-            for (int index = 0; index < volume; index++) {
-                int paletteIndex = packedValue(packed, bits, index);
-                BlockState state = paletteIndex >= 0 && paletteIndex < palette.size()
-                        ? palette.get(paletteIndex) : Blocks.AIR.defaultBlockState();
-                if (state.isAir() && !includeAir) continue;
+            List<BlockState> palette = readCompoundPalette(region.getListOrEmpty("BlockStatePalette"));
+            long[] packed = longs(region, "BlockStates");
+            Map<BlockPos, CompoundTag> blockEntities = readLitematicBlockEntities(region.getListOrEmpty("TileEntities"));
 
-                BlockPos local = positionFromLinear(sx, sz, index);
-                BlockPos relative = regionPos.offset(
-                        local.getX() * signX,
-                        local.getY() * signY,
-                        local.getZ() * signZ
-                );
-                CompoundTag be = blockEntities.get(local);
-                if (be == null) be = blockEntities.get(relative);
-                byPosition.put(relative, new ConstructionEntry(relative, state, be));
+            if (!palette.isEmpty() && packed.length > 0) {
+                int bits = Math.max(2, 32 - Integer.numberOfLeadingZeros(Math.max(1, palette.size() - 1)));
+                for (int index = 0; index < volume; index++) {
+                    int paletteIndex = packedValue(packed, bits, index);
+                    BlockState state = paletteIndex >= 0 && paletteIndex < palette.size()
+                            ? palette.get(paletteIndex) : Blocks.AIR.defaultBlockState();
+                    if (state.isAir() && !includeAir) continue;
+
+                    BlockPos local = positionFromLinear(sx, sz, index);
+                    BlockPos relative = regionPos.offset(local.getX() * signX, local.getY() * signY, local.getZ() * signZ);
+                    CompoundTag be = blockEntities.get(local);
+                    byPosition.put(relative, new ConstructionEntry(relative, state, be));
+                }
             }
+
+            readLitematicEntities(region.getListOrEmpty("Entities"), regionPos, entities);
         }
-        return new ConstructionPlan(new ArrayList<>(byPosition.values()));
+
+        ArrayList<ConstructionEntry> blocks = new ArrayList<>(byPosition.values());
+        if (!hasDeclaredBounds) return new ConstructionPlan(blocks, entities);
+        BlockPos min = new BlockPos(minX, minY, minZ);
+        return new ConstructionPlan(blocks, entities, min, maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1);
     }
 
     private static Map<BlockPos, CompoundTag> readLitematicBlockEntities(ListTag list) {
@@ -252,6 +311,16 @@ public final class SchematicPlanLoader {
             result.put(pos, tag.copy());
         }
         return result;
+    }
+
+    private static void readLitematicEntities(ListTag list, BlockPos regionPos, List<ConstructionEntityEntry> output) {
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i) instanceof CompoundTag tag)) continue;
+            Vec3 local = doubleListPos(tag.getListOrEmpty("Pos"));
+            if (local == null) continue;
+            Vec3 relative = local.add(regionPos.getX(), regionPos.getY(), regionPos.getZ());
+            output.add(new ConstructionEntityEntry(relative, tag.copy()));
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -270,6 +339,7 @@ public final class SchematicPlanLoader {
         byte[] addBlocks = bytes(root, "AddBlocks");
         if (blocks.length < volume) throw new IOException("Legacy schematic block array is truncated: " + fileName);
 
+        Map<BlockPos, CompoundTag> blockEntities = readLegacyBlockEntities(root.getListOrEmpty("TileEntities"));
         ArrayList<ConstructionEntry> entries = new ArrayList<>(volume);
         for (int index = 0; index < volume; index++) {
             int id = blocks[index] & 0xFF;
@@ -280,14 +350,37 @@ public final class SchematicPlanLoader {
             int meta = index < data.length ? data[index] & 0x0F : 0;
             BlockState state = legacyState(id, meta);
             if (state.isAir() && !includeAir) continue;
-            entries.add(new ConstructionEntry(positionFromLinear(width, length, index), state));
+            BlockPos pos = positionFromLinear(width, length, index);
+            entries.add(new ConstructionEntry(pos, state, blockEntities.get(pos)));
         }
-        return new ConstructionPlan(entries);
+        List<ConstructionEntityEntry> entities = readLegacyEntities(root.getListOrEmpty("Entities"));
+        return new ConstructionPlan(entries, entities, BlockPos.ZERO, width, height, length);
+    }
+
+    private static Map<BlockPos, CompoundTag> readLegacyBlockEntities(ListTag list) {
+        Map<BlockPos, CompoundTag> result = new LinkedHashMap<>();
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i) instanceof CompoundTag tag)) continue;
+            BlockPos pos = new BlockPos(number(tag, "x", 0), number(tag, "y", 0), number(tag, "z", 0));
+            result.put(pos, tag.copy());
+        }
+        return result;
+    }
+
+    private static List<ConstructionEntityEntry> readLegacyEntities(ListTag list) {
+        ArrayList<ConstructionEntityEntry> result = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            if (!(list.get(i) instanceof CompoundTag tag)) continue;
+            Vec3 pos = doubleListPos(tag.getListOrEmpty("Pos"));
+            if (pos != null) result.add(new ConstructionEntityEntry(pos, tag.copy()));
+        }
+        return result;
     }
 
     /**
      * Best-effort vanilla legacy ID mapping. Modded numeric IDs from old 1.12-era
-     * modpacks are inherently not portable without the original registry map.
+     * modpacks are inherently not portable without the registry map from the
+     * world/modpack that created the file.
      */
     private static BlockState legacyState(int id, int data) {
         String name = switch (id) {
@@ -467,6 +560,16 @@ public final class SchematicPlanLoader {
     private static BlockPos intArrayPos(CompoundTag tag, String key) {
         int[] values = ints(tag, key);
         return values.length >= 3 ? new BlockPos(values[0], values[1], values[2]) : null;
+    }
+
+    private static BlockPos intListPos(ListTag list) {
+        if (list == null || list.size() < 3) return null;
+        return new BlockPos(list.getIntOr(0, 0), list.getIntOr(1, 0), list.getIntOr(2, 0));
+    }
+
+    private static Vec3 doubleListPos(ListTag list) {
+        if (list == null || list.size() < 3) return null;
+        return new Vec3(list.getDoubleOr(0, 0.0), list.getDoubleOr(1, 0.0), list.getDoubleOr(2, 0.0));
     }
 
     private static BlockPos compoundPos(CompoundTag tag) {

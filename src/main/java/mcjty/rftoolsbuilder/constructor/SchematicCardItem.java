@@ -1,6 +1,7 @@
 package mcjty.rftoolsbuilder.constructor;
 
 import mcjty.rftoolsbuilder.constructor.plan.BlockSubstitutionRules;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -15,8 +16,10 @@ import net.minecraft.world.level.block.Block;
 
 import java.util.function.Consumer;
 
+/** A portable reference to a validated server schematic plus its world deployment transform. */
 public final class SchematicCardItem extends Item {
     public static final int MAX_REPLACEMENTS = 8;
+    public static final int SCHEMA_VERSION = 2;
     private static final String P = "QTSchematic";
 
     public SchematicCardItem(Properties properties) {
@@ -32,28 +35,46 @@ public final class SchematicCardItem extends Item {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
     }
 
-    public static void setSource(ItemStack stack, String displayName, String sourceFile, String sourceType) {
+    public static void setSource(ItemStack stack, String displayName, String serverFile, String clientFile,
+                                 String sourceType, String sha256, int sizeX, int sizeY, int sizeZ) {
         CompoundTag tag = root(stack);
-        String safeName = displayName == null ? "" : displayName;
-        String safeFile = sourceFile == null ? "" : sourceFile;
-        String safeType = sourceType == null ? "" : sourceType;
-        tag.putString(P + "SourceType", safeType);
-        tag.putString(P + "SourceName", safeName);
-        tag.putString(P + "SourceFile", safeFile);
+        tag.putInt(P + "Schema", SCHEMA_VERSION);
+        tag.putString(P + "SourceType", safe(sourceType));
+        tag.putString(P + "SourceName", safe(displayName));
+        tag.putString(P + "SourceFile", safe(serverFile));
+        tag.putString(P + "ClientFile", safe(clientFile));
+        tag.putString(P + "Sha256", safe(sha256));
+        tag.putInt(P + "SizeX", Math.max(0, sizeX));
+        tag.putInt(P + "SizeY", Math.max(0, sizeY));
+        tag.putInt(P + "SizeZ", Math.max(0, sizeZ));
+        tag.putBoolean(P + "Deployed", false);
+        tag.putLong(P + "Anchor", BlockPos.ZERO.asLong());
         tag.putInt(P + "Rotation", 0);
         tag.putInt(P + "Mirror", 0);
-        tag.putInt(P + "OffsetX", 0);
-        tag.putInt(P + "OffsetY", 0);
-        tag.putInt(P + "OffsetZ", 0);
+        // Old dev.4 offset fields are intentionally removed during migration.
+        tag.remove(P + "OffsetX");
+        tag.remove(P + "OffsetY");
+        tag.remove(P + "OffsetZ");
         saveRoot(stack, tag);
     }
 
-    public static void setSource(ItemStack stack, String fileName, String sourceType) {
-        setSource(stack, fileName, fileName, sourceType);
+    /** Compatibility overload for older development code. */
+    public static void setSource(ItemStack stack, String displayName, String serverFile, String sourceType) {
+        setSource(stack, displayName, serverFile, displayName, sourceType, "", 0, 0, 0);
     }
+
+    public static void setSource(ItemStack stack, String fileName, String sourceType) {
+        setSource(stack, fileName, fileName, fileName, sourceType, "", 0, 0, 0);
+    }
+
+    private static String safe(String value) { return value == null ? "" : value; }
 
     public static boolean hasSource(ItemStack stack) {
         return !sourceFile(stack).isBlank() && !sourceType(stack).isBlank();
+    }
+
+    public static boolean hasBounds(ItemStack stack) {
+        return sizeX(stack) > 0 && sizeY(stack) > 0 && sizeZ(stack) > 0;
     }
 
     public static String sourceName(ItemStack stack) {
@@ -61,34 +82,46 @@ public final class SchematicCardItem extends Item {
         return value.isBlank() ? "Empty Schematic Card" : value;
     }
 
-    public static String sourceFile(ItemStack stack) {
-        return root(stack).getString(P + "SourceFile").orElse("");
+    /** Server-authoritative uploaded file path. */
+    public static String sourceFile(ItemStack stack) { return root(stack).getString(P + "SourceFile").orElse(""); }
+    /** Original path relative to the client's schematics folder, used only for preview rendering. */
+    public static String clientFile(ItemStack stack) {
+        String value = root(stack).getString(P + "ClientFile").orElse("");
+        return value.isBlank() ? sourceName(stack) : value;
+    }
+    public static String sourceType(ItemStack stack) { return root(stack).getString(P + "SourceType").orElse(""); }
+    public static String sha256(ItemStack stack) { return root(stack).getString(P + "Sha256").orElse(""); }
+    public static int sizeX(ItemStack stack) { return Math.max(0, root(stack).getIntOr(P + "SizeX", 0)); }
+    public static int sizeY(ItemStack stack) { return Math.max(0, root(stack).getIntOr(P + "SizeY", 0)); }
+    public static int sizeZ(ItemStack stack) { return Math.max(0, root(stack).getIntOr(P + "SizeZ", 0)); }
+    public static int rotation(ItemStack stack) { return Math.floorMod(root(stack).getIntOr(P + "Rotation", 0), 4); }
+    public static int mirror(ItemStack stack) { return Math.max(0, Math.min(2, root(stack).getIntOr(P + "Mirror", 0))); }
+    public static boolean deployed(ItemStack stack) { return root(stack).getBooleanOr(P + "Deployed", false); }
+    public static BlockPos anchor(ItemStack stack) { return BlockPos.of(root(stack).getLongOr(P + "Anchor", BlockPos.ZERO.asLong())); }
+
+    public static SchematicTransform transform(ItemStack stack) {
+        return new SchematicTransform(anchor(stack), rotation(stack), mirror(stack), sizeX(stack), sizeY(stack), sizeZ(stack));
     }
 
-    public static String sourceType(ItemStack stack) {
-        return root(stack).getString(P + "SourceType").orElse("");
-    }
-
-    public static int rotation(ItemStack stack) {
-        return Math.floorMod(root(stack).getIntOr(P + "Rotation", 0), 4);
-    }
-
-    public static int mirror(ItemStack stack) {
-        return Math.max(0, Math.min(2, root(stack).getIntOr(P + "Mirror", 0)));
-    }
-
-    public static int offsetX(ItemStack stack) { return root(stack).getIntOr(P + "OffsetX", 0); }
-    public static int offsetY(ItemStack stack) { return root(stack).getIntOr(P + "OffsetY", 0); }
-    public static int offsetZ(ItemStack stack) { return root(stack).getIntOr(P + "OffsetZ", 0); }
-
-    public static void setConfig(ItemStack stack, int rotation, int mirror, int x, int y, int z) {
+    public static void setDeployment(ItemStack stack, BlockPos anchor, int rotation, int mirror, boolean deployed) {
         CompoundTag tag = root(stack);
+        tag.putLong(P + "Anchor", (anchor == null ? BlockPos.ZERO : anchor).asLong());
         tag.putInt(P + "Rotation", Math.floorMod(rotation, 4));
         tag.putInt(P + "Mirror", Math.max(0, Math.min(2, mirror)));
-        tag.putInt(P + "OffsetX", clampOffset(x));
-        tag.putInt(P + "OffsetY", clampOffset(y));
-        tag.putInt(P + "OffsetZ", clampOffset(z));
+        tag.putBoolean(P + "Deployed", deployed);
         saveRoot(stack, tag);
+    }
+
+    public static void clearDeployment(ItemStack stack) {
+        setDeployment(stack, BlockPos.ZERO, 0, 0, false);
+    }
+
+    /** Old prototype API retained only so older dev cards do not crash while migrating. */
+    @Deprecated public static int offsetX(ItemStack stack) { return 0; }
+    @Deprecated public static int offsetY(ItemStack stack) { return 0; }
+    @Deprecated public static int offsetZ(ItemStack stack) { return 0; }
+    @Deprecated public static void setConfig(ItemStack stack, int rotation, int mirror, int x, int y, int z) {
+        setDeployment(stack, anchor(stack), rotation, mirror, deployed(stack));
     }
 
     public static int replacementCount(ItemStack stack) {
@@ -112,7 +145,6 @@ public final class SchematicCardItem extends Item {
             }
         }
         if (count >= MAX_REPLACEMENTS) return false;
-
         tag.putString(P + "ReplacementFrom" + count, fromString);
         tag.putString(P + "ReplacementTo" + count, toId.toString());
         tag.putInt(P + "ReplacementCount", count + 1);
@@ -147,10 +179,6 @@ public final class SchematicCardItem extends Item {
         }
     }
 
-    private static int clampOffset(int value) {
-        return Math.max(-64, Math.min(64, value));
-    }
-
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> text, TooltipFlag flag) {
         if (!hasSource(stack)) {
@@ -160,6 +188,8 @@ public final class SchematicCardItem extends Item {
         text.accept(Component.literal(sourceName(stack)));
         SchematicFolderIndex.Format format = SchematicFolderIndex.Format.fromId(sourceType(stack));
         text.accept(Component.literal("Format: " + (format == null ? sourceType(stack) : format.label())));
+        if (hasBounds(stack)) text.accept(Component.literal("Size: " + sizeX(stack) + " × " + sizeY(stack) + " × " + sizeZ(stack)));
+        text.accept(Component.literal(deployed(stack) ? "Positioned at " + anchor(stack).toShortString() : "Not positioned — deploy in world first"));
         int replacements = replacementCount(stack);
         if (replacements > 0) text.accept(Component.literal("Replacements: " + replacements));
     }

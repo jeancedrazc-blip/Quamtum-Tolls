@@ -1,0 +1,312 @@
+QUANTUM TOOLS — PADRÃO OBRIGATÓRIO DE DESENVOLVIMENTO
+Versão do documento: 1.0
+Data: 2026-08-20
+
+OBJETIVO
+Este documento define como o Quantum Tools deve ser desenvolvido daqui para frente. Ele existe para impedir simplificações não autorizadas, implementações pela metade, regressões visuais ou funcionais e alterações indevidas em sistemas já aprovados.
+
+A regra central do projeto é:
+RESULTADO DESEJADO > CAMINHO MAIS RÁPIDO.
+
+Não escolher a solução mais simples apenas porque é mais fácil, rápida ou curta. O critério é entregar o comportamento, a qualidade visual e a robustez técnica pedidos.
+
+============================================================
+1. FONTE DE VERDADE DO PROJETO
+============================================================
+
+1.1. O código-fonte no GitHub é a base de desenvolvimento.
+- Novas alterações devem ser feitas em src/main/java e src/main/resources.
+- O JAR não deve voltar a ser usado como base normal de edição depois que o código-fonte equivalente estiver consolidado.
+- O JAR aprovado continua sendo referência de validação e recuperação, não a base cotidiana de desenvolvimento.
+
+1.2. Toda nova funcionalidade ou correção deve atualizar o código-fonte.
+- Não entregar apenas um JAR alterado sem refletir a alteração no repositório.
+- O commit deve representar exatamente a alteração entregue.
+- Assets aprovados também fazem parte do código-fonte e devem permanecer versionados.
+
+1.3. Não substituir uma implementação existente por uma versão reduzida.
+- Antes de alterar uma classe, entender sua responsabilidade, chamadas, estado persistido, networking, renderização e integrações.
+- Preservar comportamento que não faz parte da solicitação de mudança.
+
+============================================================
+2. REGRA DE EXECUÇÃO POR ETAPAS
+============================================================
+
+2.1. Trabalhar em uma etapa por vez.
+- A próxima etapa só começa depois que a etapa atual estiver funcionalmente concluída e, quando necessário, aprovada visualmente em jogo.
+- Não começar outro sistema para “adiantar” enquanto o atual ainda possui erro conhecido.
+
+2.2. Cada etapa deve ter critério objetivo de conclusão.
+Exemplos:
+- Modelagem: aparece corretamente no mundo, proporção aprovada, sem missing model, sem clipping grave, sem textura provisória.
+- UI: todos os controles existem, funcionam por mouse, estado atual é visível e servidor/cliente permanecem sincronizados.
+- Schematic: carregar, visualizar, posicionar, transformar, confirmar e consumir na Constructor deve formar um fluxo completo.
+
+2.3. Protótipo não é implementação final.
+- Placeholder, botão sem ação, método vazio, fluxo incompleto, asset provisório ou comportamento parcialmente simulado devem ser explicitamente marcados como protótipo.
+- Nunca chamar de “concluído” algo que ainda depende de uma etapa essencial inexistente.
+
+============================================================
+3. PADRÃO DE MODELAGEM 3D / BLOCOS
+============================================================
+
+3.1. Referências visuais são especificação.
+- Quando uma imagem aprovada ou um mod de referência for fornecido, a silhueta, proporção, volume, distribuição de detalhes e leitura visual devem ser estudados e reproduzidos com fidelidade compatível com Minecraft.
+- Não interpretar uma referência complexa como licença para produzir um cubo com alguns detalhes.
+
+3.2. Referência técnica atual de modelagem: Oritech.
+- Usar o Oritech como referência para densidade de detalhe, organização de peças, legibilidade de máquinas e acabamento dentro da linguagem visual do Minecraft.
+- Isso não significa copiar assets do Oritech; significa atingir nível equivalente de construção de volumes e acabamento.
+
+3.3. Tipo de modelagem desejado.
+- Modelagem multipart detalhada em unidades de modelo Minecraft.
+- Volumes mecânicos reais, não apenas desenhos simulados na textura.
+- Silhueta reconhecível em lateral, frontal, traseira e perspectiva.
+- Peças com função visual clara: chassis, armor plates, pivôs, juntas, trilhos, vents, emissivos, muzzle, apoios e suportes.
+- Separação de partes móveis quando a máquina exige animação.
+- Pivôs de yaw/pitch posicionados de acordo com a mecânica real do renderer.
+- Emissivos separados das peças opacas quando necessário.
+
+3.4. Para a Constructor especificamente.
+- Modelo aprovado: V5.
+- A V5 está congelada como visual oficial até pedido explícito de alteração.
+- Base: baixa, estável, mecânica, com pés/apoios definidos.
+- Pivô: robusto e mecanicamente crível.
+- Canhão: corpo alongado, limpo e dominante, sem traseira exagerada.
+- Paleta: branco técnico, grafite/metal escuro e ciano emissivo.
+- Texturas: limpas; painéis podem ter linhas técnicas, mas sem excesso de riscos/ruído.
+- O emissivo deve reforçar a leitura de energia, não encobrir a modelagem.
+
+3.5. O que NÃO fazer na modelagem.
+- Não criar “cubo genérico com detalhes”.
+- Não reduzir uma máquina complexa a poucos cuboides para economizar trabalho.
+- Não usar textura para fingir volume que deveria existir geometricamente.
+- Não poluir toda a superfície com riscos, grids e linhas aleatórias.
+- Não aumentar/diminuir proporções arbitrariamente sem comparar com a referência em jogo.
+- Não alterar simultaneamente base, corpo, pivô e muzzle quando apenas uma região está sendo refinada.
+- Não descartar uma versão aprovada ao tentar “melhorar” outra parte.
+
+3.6. Validação visual obrigatória.
+- Testar no mundo real do Minecraft.
+- Avaliar pelo menos frente, lateral e diagonal.
+- Comparar escala com jogador, blocos vanilla e outras máquinas.
+- Corrigir uma região por vez quando o modelo já estiver próximo do aprovado.
+
+============================================================
+4. TEXTURAS
+============================================================
+
+4.1. Textura complementa a geometria.
+- A textura deve definir material, painelização, desgaste controlado e detalhes de superfície.
+- Não deve substituir a forma 3D principal.
+
+4.2. Estilo desejado.
+- Sci-fi técnico e limpo.
+- Contraste legível entre white armor / dark chassis / metal / cyan energy.
+- Detalhamento controlado e coerente.
+- Evitar ruído visual excessivo.
+
+4.3. Não simplificar resolução, mapas ou variações sem necessidade técnica.
+- Se uma textura maior for necessária para o nível de detalhe, usar a resolução apropriada.
+- Não reduzir para 16x16 apenas por conveniência quando a máquina exige mais informação visual.
+
+============================================================
+5. PROGRAMAÇÃO E ARQUITETURA
+============================================================
+
+5.1. O Quantum Tools é um mod complexo.
+- Implementações devem considerar ciclo completo do sistema.
+- Uma feature não é apenas “o método que faz acontecer”; inclui estado, persistência, networking, UI, erros, sincronização e compatibilidade.
+
+5.2. Antes de programar uma alteração complexa:
+1) localizar todas as classes envolvidas;
+2) mapear servidor/cliente;
+3) mapear NBT/DataComponents/estado persistente;
+4) mapear packets/payloads;
+5) mapear renderer e UI se aplicável;
+6) identificar compatibilidades externas;
+7) só então alterar a implementação.
+
+5.3. Referências técnicas são para análise profunda.
+- Create, Mekanism, Pipez, Oritech e outros mods fornecidos devem ser estudados no sistema relevante, não apenas usados como inspiração superficial.
+- Se a referência resolve upload, preview, transformações, inventário, capabilities ou renderização de forma robusta, entender o fluxo completo antes de adaptar o conceito.
+
+5.4. Não procurar a solução “mais curta”.
+- Preferir arquitetura correta a hack temporário.
+- Não esconder falhas com fallback silencioso quando o erro deveria ser resolvido.
+- Não criar duplicação de estado se já existe uma fonte de verdade.
+- Não quebrar compatibilidade existente para economizar implementação.
+
+============================================================
+6. SCHEMATIC — PADRÃO OBRIGATÓRIO
+============================================================
+
+6.1. Fluxo completo esperado.
+Arquivo -> seleção -> upload -> validação -> parsing -> ConstructionPlan -> preview holográfico -> editor de placement -> confirmação -> cartão/deployment -> Constructor -> materiais/energia -> mira/disparo -> placement -> conclusão.
+
+Nenhuma dessas fases deve ser pulada ou simulada pela metade.
+
+6.2. Formatos devem preservar informações relevantes.
+- Bounds declarados.
+- Origem/offset quando o formato possuir.
+- Paleta e BlockState.
+- BlockEntity data suportada.
+- Entidades suportadas quando aplicável.
+- Transformações de rotação e espelhamento.
+
+6.3. Preview.
+- Deve mostrar blocos reais do schematic, não apenas bounding box quando o plano já estiver disponível.
+- Deve refletir imediatamente posição, rotação e mirror atuais.
+- Não deve “fugir” conforme o jogador muda a mira depois de definida a posição inicial.
+
+============================================================
+7. PLACEMENT EDITOR — SEM ATALHOS OBRIGATÓRIOS
+============================================================
+
+7.1. Não usar keybinds como fluxo principal.
+Motivo: o modpack possui muitos mods e keybinds entram em conflito.
+
+7.2. O editor deve ser controlado por UI/mouse.
+Controles esperados:
+- X -10 / -1 / +1 / +10
+- Y -10 / -1 / +1 / +10
+- Z -10 / -1 / +1 / +10
+- Rotate 0 / 90 / 180 / 270
+- Mirror None / X / Z (ou equivalentes Left/Right e Front/Back)
+- Place at Look / reposicionar para o bloco mirado apenas quando o usuário clicar
+- Center on Player quando fizer sentido
+- Reset Transform
+- Confirm
+- Cancel
+- Clear Deployment
+- Exibir anchor atual
+- Exibir dimensões
+- Exibir rotação e mirror atuais
+
+7.3. Comportamento de posicionamento.
+- Ao abrir o editor pela primeira vez, a mira pode definir uma posição inicial.
+- Depois disso o anchor fica travado.
+- O schematic só se move por ação explícita do usuário.
+- Confirmar sincroniza o estado com o servidor.
+- Cancelar restaura o deployment anterior sem destruir dados do cartão.
+
+7.4. Atalhos de teclado antigos não devem continuar registrados como alternativa escondida.
+- Evitar conflitos de modpack.
+- Se algum atalho opcional for adicionado no futuro, ele deve ser explicitamente solicitado e configurável.
+
+============================================================
+8. UI / UX
+============================================================
+
+8.1. UI deve ser ferramenta, não decoração.
+- Controles devem representar todas as ações necessárias.
+- Estado atual deve estar visível.
+- Não depender de mensagens de chat para operações essenciais.
+
+8.2. Para edição de schematic.
+- Preferir painel compacto/lateral para manter visão do holograma.
+- Não cobrir todo o mundo sem necessidade.
+- Alterações devem refletir no preview imediatamente.
+
+8.3. Não esconder funções essenciais em combinações de teclas não documentadas.
+
+============================================================
+9. COMPILAÇÃO E VALIDAÇÃO
+============================================================
+
+9.1. Nenhuma alteração Java é concluída sem compilação.
+Comando de referência:
+gradle build
+
+9.2. Critério mínimo:
+BUILD SUCCESSFUL
+
+9.3. Depois da compilação, ainda é obrigatório teste em jogo quando a feature depende de comportamento visual/interativo.
+- Build bem-sucedida significa “compila”, não “está aprovada”.
+
+9.4. Erros devem ser corrigidos na etapa atual.
+- Não entregar JAR quebrado para “ver se funciona”.
+- Não avançar para outra feature deixando erro conhecido.
+
+============================================================
+10. GITHUB E VERSIONAMENTO
+============================================================
+
+10.1. O repositório deve conter:
+- build.gradle / settings.gradle / gradle.properties;
+- src/main/java;
+- src/main/resources;
+- documentação relevante;
+- assets aprovados;
+- scripts de validação quando úteis.
+
+10.2. Fluxo recomendado.
+1) criar branch específica da alteração;
+2) implementar;
+3) compilar;
+4) testar em jogo quando necessário;
+5) corrigir;
+6) aprovar;
+7) promover para main;
+8) toda alteração seguinte parte da main atualizada.
+
+10.3. A main deve representar o último estado aprovado e utilizável do código-fonte.
+- Não promover versão sabidamente incompleta.
+- Não deixar uma melhoria aprovada apenas em JAR local.
+
+============================================================
+11. SISTEMAS APROVADOS DEVEM SER CONGELADOS
+============================================================
+
+11.1. Quando uma etapa for aprovada, ela passa a ser “frozen” para alterações não relacionadas.
+Exemplo atual:
+- Constructor Model V5: APROVADA/FROZEN.
+
+11.2. Uma correção em schematic não pode alterar a modelagem V5.
+11.3. Uma correção de UI não pode reescrever loader sem necessidade.
+11.4. Mudanças cruzadas só são permitidas quando existe dependência técnica real e devem ser explicitamente justificadas.
+
+============================================================
+12. O QUE NÃO DEVE ACONTECER
+============================================================
+
+- Não simplificar sem autorização.
+- Não fazer metade da funcionalidade e chamar de pronta.
+- Não trocar fidelidade por velocidade.
+- Não ignorar referência fornecida.
+- Não recomeçar uma implementação se o sistema existente pode ser corrigido de forma segura.
+- Não alterar sistemas aprovados durante uma correção não relacionada.
+- Não usar placeholders na entrega final.
+- Não esconder feature essencial atrás de keybind conflitante.
+- Não fazer UI sem todos os controles necessários.
+- Não fazer renderer sem considerar pivôs e transformações reais.
+- Não fazer modelo detalhado apenas na textura.
+- Não entregar build sem compilar.
+- Não promover código incompleto para main.
+- Não usar o JAR como substituto permanente do código-fonte.
+- Não assumir que “mais simples” significa “melhor”.
+
+============================================================
+13. DEFINIÇÃO DE PRONTO
+============================================================
+
+Uma tarefa só pode ser marcada como CONCLUÍDA quando:
+
+[ ] O requisito pedido foi implementado integralmente.
+[ ] Não existem partes essenciais simuladas ou ausentes.
+[ ] O projeto compila.
+[ ] Não houve regressão conhecida em sistemas congelados/aprovados.
+[ ] UI e networking estão sincronizados quando aplicável.
+[ ] Persistência funciona quando aplicável.
+[ ] O teste em jogo foi realizado quando necessário.
+[ ] O resultado visual foi aprovado quando se trata de modelagem/textura/UI visual.
+[ ] O código-fonte foi atualizado no GitHub.
+[ ] A alteração está documentada o suficiente para continuar o desenvolvimento sem adivinhação.
+
+============================================================
+14. REGRA FINAL
+============================================================
+
+O Quantum Tools deve ser tratado como produto/mod completo, não como protótipo rápido.
+Se o requisito exigir mais modelagem, mais classes, mais networking, mais validação ou mais tempo de implementação, isso faz parte do trabalho.
+A solução correta é a que entrega o resultado solicitado com qualidade, estabilidade e continuidade de desenvolvimento — não a que produz menos código ou termina com menos etapas.

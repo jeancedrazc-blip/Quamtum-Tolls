@@ -7,6 +7,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -15,11 +16,12 @@ public final class ConstructorNetworking {
     private ConstructorNetworking() {}
 
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("2");
+        PayloadRegistrar registrar = event.registrar("3");
         registrar.playToServer(BeginUpload.TYPE, BeginUpload.STREAM_CODEC, ConstructorNetworking::handleBegin);
         registrar.playToServer(UploadChunk.TYPE, UploadChunk.STREAM_CODEC, ConstructorNetworking::handleChunk);
         registrar.playToServer(FinishUpload.TYPE, FinishUpload.STREAM_CODEC, ConstructorNetworking::handleFinish);
         registrar.playToServer(CancelUpload.TYPE, CancelUpload.STREAM_CODEC, ConstructorNetworking::handleCancel);
+        registrar.playToServer(SyncDeployment.TYPE, SyncDeployment.STREAM_CODEC, ConstructorNetworking::handleDeployment);
     }
 
     private static ServerPlayer serverPlayer(IPayloadContext context) {
@@ -46,11 +48,24 @@ public final class ConstructorNetworking {
         if (player != null) SchematicUploadManager.cancel(player, payload.tablePos(), false, "Upload cancelled");
     }
 
+    private static void handleDeployment(SyncDeployment payload, IPayloadContext context) {
+        ServerPlayer player = serverPlayer(context);
+        if (player == null) return;
+        int slot = payload.slot();
+        if (slot < 0 || slot >= 9 || slot != player.getInventory().selected) return;
+        ItemStack stack = player.getInventory().getItem(slot);
+        if (!(stack.getItem() instanceof SchematicCardItem) || !SchematicCardItem.hasSource(stack) || !SchematicCardItem.hasBounds(stack)) return;
+        String expectedHash = SchematicCardItem.sha256(stack);
+        if (!expectedHash.isBlank() && !expectedHash.equals(payload.sha256())) return;
+        SchematicCardItem.setDeployment(stack, payload.anchor(), payload.rotation(), payload.mirror(), payload.deployed());
+        player.getInventory().setChanged();
+    }
+
     public record BeginUpload(BlockPos tablePos, String fileName, String format, long size, String sha256) implements CustomPacketPayload {
         public static final Type<BeginUpload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(ConstructorBootstrap.MOD_ID, "schematic_upload_begin"));
         public static final StreamCodec<ByteBuf, BeginUpload> STREAM_CODEC = StreamCodec.composite(
                 BlockPos.STREAM_CODEC, BeginUpload::tablePos,
-                ByteBufCodecs.stringUtf8(260), BeginUpload::fileName,
+                ByteBufCodecs.stringUtf8(512), BeginUpload::fileName,
                 ByteBufCodecs.stringUtf8(32), BeginUpload::format,
                 ByteBufCodecs.VAR_LONG, BeginUpload::size,
                 ByteBufCodecs.stringUtf8(64), BeginUpload::sha256,
@@ -78,6 +93,20 @@ public final class ConstructorNetworking {
     public record CancelUpload(BlockPos tablePos) implements CustomPacketPayload {
         public static final Type<CancelUpload> TYPE = new Type<>(Identifier.fromNamespaceAndPath(ConstructorBootstrap.MOD_ID, "schematic_upload_cancel"));
         public static final StreamCodec<ByteBuf, CancelUpload> STREAM_CODEC = BlockPos.STREAM_CODEC.map(CancelUpload::new, CancelUpload::tablePos);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    public record SyncDeployment(int slot, BlockPos anchor, int rotation, int mirror, boolean deployed, String sha256) implements CustomPacketPayload {
+        public static final Type<SyncDeployment> TYPE = new Type<>(Identifier.fromNamespaceAndPath(ConstructorBootstrap.MOD_ID, "schematic_deployment"));
+        public static final StreamCodec<ByteBuf, SyncDeployment> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_INT, SyncDeployment::slot,
+                BlockPos.STREAM_CODEC, SyncDeployment::anchor,
+                ByteBufCodecs.VAR_INT, SyncDeployment::rotation,
+                ByteBufCodecs.VAR_INT, SyncDeployment::mirror,
+                ByteBufCodecs.BOOL, SyncDeployment::deployed,
+                ByteBufCodecs.stringUtf8(64), SyncDeployment::sha256,
+                SyncDeployment::new
+        );
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 }

@@ -42,7 +42,12 @@ public final class ConstructorEntitySupport {
         ConstructorRequirement requirement = ConstructorEntityRequirementRegistry.resolve(level, data);
         if (requirement.isInvalid()) return null;
         Vec3 target = transform.transformWorld(entry.relativePos());
-        return new Prepared(data, requirement, target, transform, firstVisualStack(requirement));
+        Prepared prepared = new Prepared(data, requirement, target, transform, firstVisualStack(requirement));
+
+        // The Create printer puts entities after deferred blocks. Validate
+        // hanging/support-sensitive entities here, before FE or materials are
+        // reserved, so an impossible target never consumes resources.
+        return canSpawn(level, prepared) ? prepared : null;
     }
 
     public static boolean canSpawn(ServerLevel level, Prepared prepared) {

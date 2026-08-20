@@ -34,10 +34,14 @@ public final class SchematicCardItem extends Item {
 
     public static void setSource(ItemStack stack, String fileName, String sourceType) {
         CompoundTag tag = root(stack);
-        tag.putString(P + "SourceType", sourceType == null ? "" : sourceType);
-        tag.putString(P + "SourceName", fileName == null ? "" : fileName);
-        tag.putString(P + "SourceFile", fileName == null ? "" : fileName);
-        // Re-writing a card must not inherit hidden transform data from the old dev.4 table.
+        String safeName = fileName == null ? "" : fileName;
+        String safeType = sourceType == null ? "" : sourceType;
+        tag.putString(P + "SourceType", safeType);
+        tag.putString(P + "SourceName", safeName);
+        tag.putString(P + "SourceFile", safeName);
+
+        // The table is now only a file writer/browser. Rewriting a card must not
+        // silently keep dev.4 placement transforms from a previous schematic.
         tag.putInt(P + "Rotation", 0);
         tag.putInt(P + "Mirror", 0);
         tag.putInt(P + "OffsetX", 0);
@@ -92,9 +96,8 @@ public final class SchematicCardItem extends Item {
     public static boolean addReplacement(ItemStack stack, Block from, Block to) {
         Identifier fromId = BuiltInRegistries.BLOCK.getKey(from);
         Identifier toId = BuiltInRegistries.BLOCK.getKey(to);
-        if (fromId == null || toId == null || from == to) {
-            return false;
-        }
+        if (fromId == null || toId == null || from == to) return false;
+
         CompoundTag tag = root(stack);
         int count = Math.max(0, Math.min(MAX_REPLACEMENTS, tag.getIntOr(P + "ReplacementCount", 0)));
         String fromString = fromId.toString();
@@ -106,9 +109,8 @@ public final class SchematicCardItem extends Item {
                 return true;
             }
         }
-        if (count >= MAX_REPLACEMENTS) {
-            return false;
-        }
+        if (count >= MAX_REPLACEMENTS) return false;
+
         tag.putString(P + "ReplacementFrom" + count, fromString);
         tag.putString(P + "ReplacementTo" + count, toId.toString());
         tag.putInt(P + "ReplacementCount", count + 1);
@@ -137,9 +139,7 @@ public final class SchematicCardItem extends Item {
             try {
                 Block from = BuiltInRegistries.BLOCK.getValue(Identifier.parse(fromString));
                 Block to = BuiltInRegistries.BLOCK.getValue(Identifier.parse(toString));
-                if (from != null && to != null) {
-                    rules.replace(from, to.defaultBlockState());
-                }
+                if (from != null && to != null) rules.replace(from, to.defaultBlockState());
             } catch (RuntimeException ignored) {
             }
         }
@@ -156,10 +156,8 @@ public final class SchematicCardItem extends Item {
             return;
         }
         text.accept(Component.literal(sourceName(stack)));
-        text.accept(Component.literal("Format: " + switch (sourceType(stack)) {
-            case "create_nbt" -> "Create / Vanilla NBT";
-            default -> sourceType(stack);
-        }));
+        SchematicFolderIndex.Format format = SchematicFolderIndex.Format.fromId(sourceType(stack));
+        text.accept(Component.literal("Format: " + (format == null ? sourceType(stack) : format.label())));
         int replacements = replacementCount(stack);
         if (replacements > 0) text.accept(Component.literal("Replacements: " + replacements));
     }

@@ -108,7 +108,14 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
             button.visible = exists;
             button.active = exists;
             if (exists) {
-                String name = schematics.get(index).fileName();
+                SchematicFolderIndex.Entry entry = schematics.get(index);
+                String marker = switch (entry.format()) {
+                    case VANILLA_NBT -> "NBT";
+                    case SPONGE_SCHEM -> "SCHEM";
+                    case LITEMATICA -> "LITEM";
+                    case LEGACY_SCHEMATIC -> "OLD";
+                };
+                String name = "[" + marker + "] " + entry.fileName();
                 button.setMessage(Component.literal((index == selectedIndex ? "▶ " : "  ") + trim(name, 25)));
             }
         }
@@ -124,9 +131,7 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
 
     private void sendButton(int id) {
         Minecraft mc = this.minecraft;
-        if (mc != null && mc.gameMode != null) {
-            mc.gameMode.handleInventoryButtonClick(menu.containerId, id);
-        }
+        if (mc != null && mc.gameMode != null) mc.gameMode.handleInventoryButtonClick(menu.containerId, id);
     }
 
     private static void panel(GuiGraphicsExtractor gui, int x1, int y1, int x2, int y2) {
@@ -158,21 +163,22 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
 
         gui.text(font, Component.literal("SCHEMATICS /schematics"), x + 68, y + 34, MUTED);
         if (schematics.isEmpty()) {
-            gui.text(font, Component.literal("No .nbt schematics found"), x + 72, y + 58, ORANGE);
+            gui.text(font, Component.literal("No supported schematic files"), x + 72, y + 58, ORANGE);
+            gui.text(font, Component.literal("NBT / SCHEM / LITEMATIC / SCHEMATIC"), x + 72, y + 70, MUTED);
         }
 
         int status = menu.data().get(0);
         gui.text(font, Component.literal(statusText(status)), x + 68, y + 132, statusColor(status));
 
         gui.fill(x + 8, y + 138, x + imageWidth - 8, y + 139, BORDER);
-        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 132 + 10, MUTED);
+        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 142, MUTED);
     }
 
     private static String statusText(int status) {
         return switch (status) {
             case SchematicTableBlockEntity.STATUS_READY -> "Choose a schematic and write it to the card";
             case SchematicTableBlockEntity.STATUS_WRITTEN -> "Schematic written to card";
-            case SchematicTableBlockEntity.STATUS_NO_SCHEMATICS -> "No schematics found in /schematics";
+            case SchematicTableBlockEntity.STATUS_NO_SCHEMATICS -> "No supported schematics found";
             case SchematicTableBlockEntity.STATUS_INVALID_SELECTION -> "Invalid schematic selection";
             default -> "Insert a Schematic Card";
         };

@@ -50,9 +50,9 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
     ) {
         BlockEntityRenderer.super.extractRenderState(blockEntity, state, partialTick, cameraPosition, crumblingOverlay);
 
-        this.blockResolver.update(state.turret, ConstructorBootstrap.CONSTRUCTOR_TURRET_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
-        this.blockResolver.update(state.barrel, ConstructorBootstrap.CONSTRUCTOR_BARREL_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
-        this.blockResolver.update(state.energyChannel, ConstructorBootstrap.CONSTRUCTOR_ENERGY_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
+        blockResolver.update(state.turret, ConstructorBootstrap.CONSTRUCTOR_TURRET_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
+        blockResolver.update(state.barrel, ConstructorBootstrap.CONSTRUCTOR_BARREL_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
+        blockResolver.update(state.energyChannel, ConstructorBootstrap.CONSTRUCTOR_ENERGY_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
 
         BlockPos origin = blockEntity.getBlockPos();
         BlockPos target = blockEntity.targetPos();
@@ -68,9 +68,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         float desiredPitch = 0.0f;
 
         double time = partialTick;
-        if (blockEntity.getLevel() != null) {
-            time += blockEntity.getLevel().getGameTime();
-        }
+        if (blockEntity.getLevel() != null) time += blockEntity.getLevel().getGameTime();
 
         if (!state.hasTarget && (state.status == ConstructorStatus.IDLE
                 || state.status == ConstructorStatus.COMPLETE
@@ -80,7 +78,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         }
 
         if (state.hasTarget) {
-            this.blockResolver.update(state.projectile, targetState, DISPLAY_CONTEXT);
+            blockResolver.update(state.projectile, targetState, DISPLAY_CONTEXT);
 
             state.targetX = target.getX() - origin.getX() + 0.5;
             state.targetY = target.getY() - origin.getY() + 0.5;
@@ -120,7 +118,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
         if (state.status == ConstructorStatus.FIRING && state.hasTarget) {
             state.projectileVisible = true;
-            state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick) / (float) ConstructorBlockEntity.FLIGHT_TICKS);
+            state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick) / (float) blockEntity.flightTicks());
             state.recoil = 0.145f * (1.0f - smoothStep(state.projectileProgress));
         }
     }
@@ -130,9 +128,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         submitTurret(state, poseStack, collector);
         submitBarrel(state, poseStack, collector);
         submitEnergy(state, poseStack, collector);
-        if (state.projectileVisible && state.hasTarget) {
-            submitProjectile(state, poseStack, collector);
-        }
+        if (state.projectileVisible && state.hasTarget) submitProjectile(state, poseStack, collector);
     }
 
     private static void submitTurret(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
@@ -222,16 +218,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         };
     }
 
-    private static float clamp01(float value) {
-        return Math.max(0.0f, Math.min(1.0f, value));
-    }
-
-    private static float smoothStep(float value) {
-        float t = clamp01(value);
-        return t * t * (3.0f - 2.0f * t);
-    }
-
-    private static double lerp(double a, double b, double t) {
-        return a + (b - a) * t;
-    }
+    private static float clamp01(float value) { return Math.max(0.0f, Math.min(1.0f, value)); }
+    private static float smoothStep(float value) { float t = clamp01(value); return t * t * (3.0f - 2.0f * t); }
+    private static double lerp(double a, double b, double t) { return a + (b - a) * t; }
 }

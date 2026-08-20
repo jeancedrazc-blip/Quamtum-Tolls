@@ -16,7 +16,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
                 inventory.player.level().getBlockEntity(buffer.readBlockPos()) instanceof ConstructorBlockEntity found ? found : null,
-                new SimpleContainerData(9));
+                new SimpleContainerData(13));
     }
 
     public ConstructorMenu(int id, Inventory inventory, ConstructorBlockEntity constructor, ContainerData data) {
@@ -32,7 +32,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         }
 
         int invX = 48;
-        int invY = 178;
+        int invY = 208;
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlot(new Slot(inventory, col + row * 9 + 9, invX + col * 18, invY + row * 18));

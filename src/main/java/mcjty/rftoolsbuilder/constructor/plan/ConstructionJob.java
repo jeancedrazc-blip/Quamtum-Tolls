@@ -42,8 +42,8 @@ public final class ConstructionJob {
 
         job.primary.clear();
         job.deferred.clear();
-        int[] p = tag.getIntArray("Primary");
-        int[] d = tag.getIntArray("Deferred");
+        int[] p = tag.getIntArray("Primary").orElseGet(() -> new int[0]);
+        int[] d = tag.getIntArray("Deferred").orElseGet(() -> new int[0]);
         for (int index : p) if (index >= 0 && index < plan.size()) job.primary.addLast(index);
         for (int index : d) if (index >= 0 && index < plan.size()) job.deferred.addLast(index);
 

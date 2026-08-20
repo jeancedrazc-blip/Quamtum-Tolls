@@ -178,6 +178,7 @@ public final class SchematicPlacementHandler {
             lastCardComponentsHash = componentHash;
             plan = null;
             MODEL_CACHE.clear();
+            SchematicEntityPreviewRenderer.invalidate();
             substitutions = new BlockSubstitutionRules();
             SchematicCardItem.applyReplacements(card, substitutions);
             failedPreviewHash = "";
@@ -235,6 +236,7 @@ public final class SchematicPlacementHandler {
                         return;
                     }
                     plan = loaded;
+                    SchematicEntityPreviewRenderer.invalidate();
                     failedPreviewHash = "";
                 }));
     }
@@ -265,20 +267,21 @@ public final class SchematicPlacementHandler {
         }
     }
 
-    /** Called after size + SHA validation and atomic cache commit. */
+    /** Called after size + SHA validation and cache commit. */
     public static void onPreviewCacheReady(String hash, SchematicFolderIndex.Format format, Path path) {
         if (!hash.equals(currentCardHash())) return;
         failedPreviewHash = "";
         loadingKey = "";
         plan = null;
         MODEL_CACHE.clear();
-        // Keep loadedKey/card hash so ensurePlan retries the same card from its now-verified cache.
+        SchematicEntityPreviewRenderer.invalidate();
     }
 
     public static void onPreviewCacheFailed(String hash) {
         if (hash == null || hash.isBlank() || hash.equals(currentCardHash())) failedPreviewHash = hash == null ? "" : hash;
         loadingKey = "";
         plan = null;
+        SchematicEntityPreviewRenderer.invalidate();
     }
 
     private static String currentCardHash() {
@@ -321,6 +324,8 @@ public final class SchematicPlacementHandler {
             renderState.submit(pose, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
             pose.popPose();
         }
+
+        SchematicEntityPreviewRenderer.render(plan, transform, event);
     }
 
     private static void clearTransient() {
@@ -331,6 +336,7 @@ public final class SchematicPlacementHandler {
             failedPreviewHash = "";
             plan = null;
             MODEL_CACHE.clear();
+            SchematicEntityPreviewRenderer.invalidate();
             editing = false;
             verticalOffset = 0;
             ++loadGeneration;

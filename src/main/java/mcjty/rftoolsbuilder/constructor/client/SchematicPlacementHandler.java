@@ -5,8 +5,8 @@ import mcjty.rftoolsbuilder.constructor.ConstructorNetworking;
 import mcjty.rftoolsbuilder.constructor.ConstructorStateFilterRegistry;
 import mcjty.rftoolsbuilder.constructor.SchematicCardItem;
 import mcjty.rftoolsbuilder.constructor.SchematicFolderIndex;
-import mcjty.rftoolsbuilder.constructor.SchematicPlanLoader;
 import mcjty.rftoolsbuilder.constructor.SchematicTransform;
+import mcjty.rftoolsbuilder.constructor.UniversalSchematicLoader;
 import mcjty.rftoolsbuilder.constructor.plan.BlockSubstitutionRules;
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
 import net.minecraft.client.KeyMapping;
@@ -171,11 +171,11 @@ public final class SchematicPlacementHandler {
         }
         SchematicFolderIndex.Entry entry = new SchematicFolderIndex.Entry(SchematicCardItem.clientFile(card), format);
         CompletableFuture.supplyAsync(() -> {
-            try { return SchematicPlanLoader.load(entry, false); }
+            try { return UniversalSchematicLoader.load(entry, false); }
             catch (IOException exception) { throw new RuntimeException(exception); }
         }).whenComplete((loaded, error) -> Minecraft.getInstance().execute(() -> {
             if (generation != loadGeneration) return;
-            if (error != null || loaded == null || loaded.size() == 0) {
+            if (error != null || loaded == null || loaded.totalTargets() == 0) {
                 plan = null;
                 message("Could not preview schematic: " + safeMessage(error));
                 return;

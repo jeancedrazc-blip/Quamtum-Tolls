@@ -1,5 +1,6 @@
 package mcjty.rftoolsbuilder.constructor;
 
+import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,14 +19,17 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+/** Server-side chunked schematic receiver. The output card is emitted only after checksum and parser validation. */
 public final class SchematicUploadManager {
     public static final int MAX_CHUNK_BYTES = 24 * 1024;
     public static final long MAX_FILE_BYTES = 32L * 1024L * 1024L;
+    private static final long SESSION_TIMEOUT_NANOS = 60_000_000_000L;
 
     private record Key(UUID player, long tablePos) {}
 
     private static final class Session {
         final String displayName;
+        final String clientRelativeFile;
         final SchematicFolderIndex.Format format;
         final long totalBytes;
         final String expectedHash;
@@ -35,10 +39,13 @@ public final class SchematicUploadManager {
         final OutputStream stream;
         final MessageDigest digest;
         long received;
+        long lastActivityNanos;
 
-        Session(String displayName, SchematicFolderIndex.Format format, long totalBytes, String expectedHash,
-                Path tempPath, Path finalPath, String relativeFinalPath, OutputStream stream, MessageDigest digest) {
+        Session(String displayName, String clientRelativeFile, SchematicFolderIndex.Format format,
+                long totalBytes, String expectedHash, Path tempPath, Path finalPath,
+                String relativeFinalPath, OutputStream stream, MessageDigest digest) {
             this.displayName = displayName;
+            this.clientRelativeFile = clientRelativeFile;
             this.format = format;
             this.totalBytes = totalBytes;
             this.expectedHash = expectedHash;
@@ -47,22 +54,27 @@ public final class SchematicUploadManager {
             this.relativeFinalPath = relativeFinalPath;
             this.stream = stream;
             this.digest = digest;
+            touch();
         }
+
+        void touch() { lastActivityNanos = System.nanoTime(); }
     }
 
     private static final Map<Key, Session> ACTIVE = new ConcurrentHashMap<>();
 
     private SchematicUploadManager() {}
 
-    public static void begin(ServerPlayer player, BlockPos tablePos, String rawName, String formatId, long size, String sha256) {
+    public static void begin(ServerPlayer player, BlockPos tablePos, String rawClientFile, String formatId, long size, String sha256) {
+        cleanupExpired();
         SchematicTableBlockEntity table = table(player, tablePos);
         if (table == null) return;
 
         SchematicFolderIndex.Format format = SchematicFolderIndex.Format.fromId(formatId);
-        String safeName = sanitizeFileName(rawName);
+        String clientRelative = sanitizeClientRelativePath(rawClientFile);
+        String safeName = clientRelative == null ? null : sanitizeFileName(Path.of(clientRelative).getFileName().toString());
         String expected = normalizeSha256(sha256);
-        if (format == null || safeName == null || !safeName.toLowerCase().endsWith(format.extension())) {
-            fail(player, table, "Unsupported schematic format");
+        if (format == null || clientRelative == null || safeName == null || !safeName.toLowerCase().endsWith(format.extension())) {
+            fail(player, table, "Unsupported or unsafe schematic path/format");
             return;
         }
         if (size <= 0 || size > MAX_FILE_BYTES) {
@@ -96,7 +108,7 @@ public final class SchematicUploadManager {
             OutputStream stream = Files.newOutputStream(tempPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             String relative = root.relativize(finalPath).toString().replace('\\', '/');
-            ACTIVE.put(key, new Session(safeName, format, size, expected, tempPath, finalPath, relative, stream, digest));
+            ACTIVE.put(key, new Session(safeName, clientRelative, format, size, expected, tempPath, finalPath, relative, stream, digest));
         } catch (IOException | NoSuchAlgorithmException exception) {
             table.cancelUpload(true);
             player.sendSystemMessage(Component.literal("Could not start schematic upload: " + exception.getMessage()));
@@ -104,6 +116,7 @@ public final class SchematicUploadManager {
     }
 
     public static void chunk(ServerPlayer player, BlockPos tablePos, byte[] data) {
+        cleanupExpired();
         if (data == null || data.length == 0 || data.length > MAX_CHUNK_BYTES) {
             cancel(player, tablePos, true, "Invalid schematic packet size");
             return;
@@ -123,6 +136,7 @@ public final class SchematicUploadManager {
             session.stream.write(data);
             session.digest.update(data);
             session.received += data.length;
+            session.touch();
             table.updateUploadProgress(session.received, session.totalBytes);
         } catch (IOException exception) {
             cancel(player, tablePos, true, "I/O error while receiving schematic");
@@ -130,6 +144,7 @@ public final class SchematicUploadManager {
     }
 
     public static void finish(ServerPlayer player, BlockPos tablePos) {
+        cleanupExpired();
         Key key = new Key(player.getUUID(), tablePos.asLong());
         Session session = ACTIVE.remove(key);
         SchematicTableBlockEntity table = table(player, tablePos);
@@ -145,13 +160,13 @@ public final class SchematicUploadManager {
             if (!actual.equals(session.expectedHash)) throw new IOException("SHA-256 checksum mismatch");
 
             Files.move(session.tempPath, session.finalPath, StandardCopyOption.REPLACE_EXISTING);
+            ConstructionPlan plan = SchematicPlanLoader.load(new SchematicFolderIndex.Entry(session.relativeFinalPath, session.format), false);
+            if (plan.size() <= 0 || plan.sizeX() <= 0 || plan.sizeY() <= 0 || plan.sizeZ() <= 0) {
+                throw new IOException("Schematic contains no printable block bounds");
+            }
 
-            // Parsing here catches a corrupt/unsupported file before a card is
-            // emitted. The Constructor therefore never receives a card that was
-            // only filename-validated.
-            SchematicPlanLoader.load(new SchematicFolderIndex.Entry(session.relativeFinalPath, session.format), false);
-
-            table.finishUpload(session.displayName, session.relativeFinalPath, session.format.id());
+            table.finishUpload(session.displayName, session.relativeFinalPath, session.clientRelativeFile,
+                    session.format.id(), actual, plan.sizeX(), plan.sizeY(), plan.sizeZ());
             player.sendSystemMessage(Component.literal("Schematic written: " + session.displayName));
         } catch (Exception exception) {
             try { Files.deleteIfExists(session.tempPath); } catch (IOException ignored) {}
@@ -170,6 +185,15 @@ public final class SchematicUploadManager {
         if (reason != null && !reason.isBlank()) player.sendSystemMessage(Component.literal(reason));
     }
 
+    private static void cleanupExpired() {
+        long now = System.nanoTime();
+        for (Map.Entry<Key, Session> entry : ACTIVE.entrySet()) {
+            Session session = entry.getValue();
+            if (now - session.lastActivityNanos <= SESSION_TIMEOUT_NANOS) continue;
+            if (ACTIVE.remove(entry.getKey(), session)) closeAndDelete(session);
+        }
+    }
+
     private static SchematicTableBlockEntity table(ServerPlayer player, BlockPos pos) {
         if (player.distanceToSqr(pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5) > 64.0) return null;
         return player.level().getBlockEntity(pos) instanceof SchematicTableBlockEntity table ? table : null;
@@ -178,6 +202,18 @@ public final class SchematicUploadManager {
     private static void fail(ServerPlayer player, SchematicTableBlockEntity table, String message) {
         if (table.isUploadOwner(player)) table.cancelUpload(true);
         player.sendSystemMessage(Component.literal(message));
+    }
+
+    private static String sanitizeClientRelativePath(String raw) {
+        if (raw == null || raw.isBlank() || raw.length() > 512) return null;
+        try {
+            Path path = Path.of(raw.replace('\\', '/')).normalize();
+            if (path.isAbsolute() || path.startsWith("..")) return null;
+            String normalized = path.toString().replace('\\', '/');
+            return normalized.isBlank() || normalized.equals(".") ? null : normalized;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private static String sanitizeFileName(String raw) {

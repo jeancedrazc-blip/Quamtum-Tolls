@@ -15,30 +15,34 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
-import java.util.List;
+import java.util.UUID;
 
 public final class SchematicTableBlockEntity extends BlockEntity implements Container, MenuProvider {
-    public static final int SLOT_CARD = 0;
-    public static final int TOTAL_SLOTS = 1;
+    public static final int SLOT_INPUT = 0;
+    public static final int SLOT_OUTPUT = 1;
+    public static final int TOTAL_SLOTS = 2;
 
     public static final int STATUS_NO_CARD = 0;
     public static final int STATUS_READY = 1;
-    public static final int STATUS_WRITTEN = 2;
-    public static final int STATUS_NO_SCHEMATICS = 3;
-    public static final int STATUS_INVALID_SELECTION = 4;
-
-    public static final int BUTTON_REFRESH = 900;
-    public static final int BUTTON_SELECT_BASE = 1000;
+    public static final int STATUS_UPLOADING = 2;
+    public static final int STATUS_FINISHED = 3;
+    public static final int STATUS_ERROR = 4;
 
     private final NonNullList<ItemStack> items = NonNullList.withSize(TOTAL_SLOTS, ItemStack.EMPTY);
+    private ItemStack pendingInput = ItemStack.EMPTY;
     private int status = STATUS_NO_CARD;
+    private int uploadProgress = 0;
+    private String uploadingName = "";
+    private UUID uploader;
 
     private final ContainerData data = new ContainerData() {
         @Override
         public int get(int index) {
             return switch (index) {
                 case 0 -> status;
-                case 1 -> SchematicCardItem.hasSource(card()) ? 1 : 0;
+                case 1 -> uploadProgress;
+                case 2 -> outputCard().isEmpty() ? 0 : 1;
+                case 3 -> pendingInput.isEmpty() ? 0 : 1;
                 default -> 0;
             };
         }
@@ -46,12 +50,11 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
         @Override
         public void set(int index, int value) {
             if (index == 0) status = value;
+            if (index == 1) uploadProgress = value;
         }
 
         @Override
-        public int getCount() {
-            return 2;
-        }
+        public int getCount() { return 4; }
     };
 
     public SchematicTableBlockEntity(BlockPos pos, BlockState state) {
@@ -59,59 +62,89 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
     }
 
     public ContainerData data() { return data; }
-    public ItemStack card() { return items.get(SLOT_CARD); }
+    public ItemStack inputCard() { return items.get(SLOT_INPUT); }
+    public ItemStack outputCard() { return items.get(SLOT_OUTPUT); }
+    public boolean isUploading() { return status == STATUS_UPLOADING; }
+    public int uploadProgress() { return uploadProgress; }
+    public String uploadingName() { return uploadingName; }
 
-    public boolean handleButton(int id) {
-        if (!(card().getItem() instanceof SchematicCardItem)) {
-            status = STATUS_NO_CARD;
-            setChanged();
-            return true;
-        }
-
-        List<SchematicFolderIndex.Entry> available = SchematicFolderIndex.list();
-        if (id == BUTTON_REFRESH) {
-            status = available.isEmpty() ? STATUS_NO_SCHEMATICS
-                    : (SchematicCardItem.hasSource(card()) ? STATUS_WRITTEN : STATUS_READY);
-            setChanged();
-            return true;
-        }
-
-        if (id >= BUTTON_SELECT_BASE) {
-            if (available.isEmpty()) {
-                status = STATUS_NO_SCHEMATICS;
-                setChanged();
-                return true;
-            }
-            int index = id - BUTTON_SELECT_BASE;
-            if (index < 0 || index >= available.size()) {
-                status = STATUS_INVALID_SELECTION;
-                setChanged();
-                return true;
-            }
-            SchematicFolderIndex.Entry entry = available.get(index);
-            SchematicCardItem.setSource(card(), entry.fileName(), entry.format().id());
-            status = STATUS_WRITTEN;
-            setChanged();
-            return true;
-        }
-
-        return false;
+    public boolean canStartUpload(Player player) {
+        return !isUploading() && pendingInput.isEmpty() && outputCard().isEmpty()
+                && inputCard().getItem() instanceof SchematicCardItem
+                && player.distanceToSqr(worldPosition.getX() + .5, worldPosition.getY() + .5, worldPosition.getZ() + .5) <= 64.0;
     }
 
-    private void refreshStatus() {
-        if (!(card().getItem() instanceof SchematicCardItem)) {
-            status = STATUS_NO_CARD;
-        } else if (SchematicCardItem.hasSource(card())) {
-            status = STATUS_WRITTEN;
-        } else {
-            status = SchematicFolderIndex.list().isEmpty() ? STATUS_NO_SCHEMATICS : STATUS_READY;
+    public boolean beginUpload(Player player, String displayName) {
+        if (!canStartUpload(player)) return false;
+        pendingInput = inputCard().copy();
+        pendingInput.setCount(1);
+        items.set(SLOT_INPUT, ItemStack.EMPTY);
+        status = STATUS_UPLOADING;
+        uploadProgress = 0;
+        uploadingName = displayName == null ? "" : displayName;
+        uploader = player.getUUID();
+        setChanged();
+        syncBlock();
+        return true;
+    }
+
+    public boolean isUploadOwner(Player player) {
+        return uploader != null && uploader.equals(player.getUUID()) && isUploading();
+    }
+
+    public void updateUploadProgress(long uploaded, long total) {
+        if (!isUploading()) return;
+        uploadProgress = total <= 0 ? 0 : Math.max(0, Math.min(10_000, (int) ((uploaded * 10_000L) / total)));
+        setChanged();
+        syncBlock();
+    }
+
+    public void finishUpload(String displayName, String serverRelativeFile, String formatId) {
+        if (!isUploading() || pendingInput.isEmpty()) return;
+        ItemStack result = pendingInput.copy();
+        result.setCount(1);
+        SchematicCardItem.setSource(result, displayName, serverRelativeFile, formatId);
+        items.set(SLOT_OUTPUT, result);
+        pendingInput = ItemStack.EMPTY;
+        status = STATUS_FINISHED;
+        uploadProgress = 10_000;
+        uploadingName = displayName == null ? "" : displayName;
+        uploader = null;
+        setChanged();
+        syncBlock();
+    }
+
+    public void cancelUpload(boolean markError) {
+        if (!pendingInput.isEmpty()) {
+            if (items.get(SLOT_INPUT).isEmpty()) items.set(SLOT_INPUT, pendingInput);
+            else if (level != null) net.minecraft.world.Containers.dropItemStack(level, worldPosition.getX() + .5, worldPosition.getY() + 1, worldPosition.getZ() + .5, pendingInput);
+        }
+        pendingInput = ItemStack.EMPTY;
+        uploader = null;
+        uploadingName = "";
+        uploadProgress = 0;
+        status = markError ? STATUS_ERROR : statusForContents();
+        setChanged();
+        syncBlock();
+    }
+
+    private int statusForContents() {
+        if (!outputCard().isEmpty()) return STATUS_FINISHED;
+        return inputCard().getItem() instanceof SchematicCardItem ? STATUS_READY : STATUS_NO_CARD;
+    }
+
+    private void refreshIdleStatus() {
+        if (!isUploading()) status = statusForContents();
+    }
+
+    private void syncBlock() {
+        if (level != null && !level.isClientSide()) {
+            BlockState state = getBlockState();
+            level.sendBlockUpdated(worldPosition, state, state, 3);
         }
     }
 
-    @Override
-    public Component getDisplayName() {
-        return Component.literal("Schematic Table");
-    }
+    @Override public Component getDisplayName() { return Component.literal("Schematic Table"); }
 
     @Override
     public AbstractContainerMenu createMenu(int id, Inventory inventory, Player player) {
@@ -122,49 +155,68 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
     protected void saveAdditional(ValueOutput output) {
         super.saveAdditional(output);
         output.putInt("Status", status);
-        ItemStack card = card();
-        if (!card.isEmpty()) output.store("Card", ItemStack.CODEC, card);
+        output.putInt("UploadProgress", uploadProgress);
+        output.putString("UploadingName", uploadingName);
+        if (uploader != null) output.putString("Uploader", uploader.toString());
+        if (!items.get(SLOT_INPUT).isEmpty()) output.store("InputCard", ItemStack.CODEC, items.get(SLOT_INPUT));
+        if (!items.get(SLOT_OUTPUT).isEmpty()) output.store("OutputCard", ItemStack.CODEC, items.get(SLOT_OUTPUT));
+        if (!pendingInput.isEmpty()) output.store("PendingInput", ItemStack.CODEC, pendingInput);
     }
 
     @Override
     protected void loadAdditional(ValueInput input) {
         super.loadAdditional(input);
-        items.set(SLOT_CARD, input.read("Card", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+        items.set(SLOT_INPUT, input.read("InputCard", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+        items.set(SLOT_OUTPUT, input.read("OutputCard", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+        pendingInput = input.read("PendingInput", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         status = input.getIntOr("Status", STATUS_NO_CARD);
-        refreshStatus();
+        uploadProgress = input.getIntOr("UploadProgress", 0);
+        uploadingName = input.getStringOr("UploadingName", "");
+        String uuid = input.getStringOr("Uploader", "");
+        try { uploader = uuid.isBlank() ? null : UUID.fromString(uuid); } catch (IllegalArgumentException ignored) { uploader = null; }
+        if (status == STATUS_UPLOADING || !pendingInput.isEmpty()) {
+            if (items.get(SLOT_INPUT).isEmpty() && !pendingInput.isEmpty()) items.set(SLOT_INPUT, pendingInput);
+            pendingInput = ItemStack.EMPTY;
+            uploader = null;
+            uploadingName = "";
+            uploadProgress = 0;
+            status = statusForContents();
+        } else refreshIdleStatus();
     }
 
     @Override public int getContainerSize() { return TOTAL_SLOTS; }
-    @Override public boolean isEmpty() { return card().isEmpty(); }
-    @Override public ItemStack getItem(int slot) { return slot == SLOT_CARD ? card() : ItemStack.EMPTY; }
+    @Override public boolean isEmpty() { return inputCard().isEmpty() && outputCard().isEmpty(); }
+    @Override public ItemStack getItem(int slot) { return slot >= 0 && slot < TOTAL_SLOTS ? items.get(slot) : ItemStack.EMPTY; }
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
-        if (slot != SLOT_CARD) return ItemStack.EMPTY;
-        ItemStack stack = card();
+        if (slot < 0 || slot >= TOTAL_SLOTS || isUploading()) return ItemStack.EMPTY;
+        ItemStack stack = items.get(slot);
         if (stack.isEmpty()) return ItemStack.EMPTY;
         ItemStack result = stack.split(amount);
-        if (stack.isEmpty()) items.set(SLOT_CARD, ItemStack.EMPTY);
-        refreshStatus();
+        if (stack.isEmpty()) items.set(slot, ItemStack.EMPTY);
+        refreshIdleStatus();
         setChanged();
         return result;
     }
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
-        if (slot != SLOT_CARD) return ItemStack.EMPTY;
-        ItemStack result = card();
-        items.set(SLOT_CARD, ItemStack.EMPTY);
-        refreshStatus();
+        if (slot < 0 || slot >= TOTAL_SLOTS || isUploading()) return ItemStack.EMPTY;
+        ItemStack result = items.get(slot);
+        items.set(slot, ItemStack.EMPTY);
+        refreshIdleStatus();
         return result;
     }
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        if (slot != SLOT_CARD) return;
-        items.set(SLOT_CARD, stack);
+        if (slot < 0 || slot >= TOTAL_SLOTS || isUploading()) return;
+        if (slot == SLOT_INPUT && !stack.isEmpty() && !(stack.getItem() instanceof SchematicCardItem)) return;
+        if (slot == SLOT_OUTPUT && !stack.isEmpty()) return;
+        items.set(slot, stack);
         if (!stack.isEmpty() && stack.getCount() > 1) stack.setCount(1);
-        refreshStatus();
+        refreshIdleStatus();
         setChanged();
     }
 
@@ -172,8 +224,11 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
 
     @Override
     public void clearContent() {
-        items.set(SLOT_CARD, ItemStack.EMPTY);
-        refreshStatus();
+        if (isUploading()) cancelUpload(false);
+        items.set(SLOT_INPUT, ItemStack.EMPTY);
+        items.set(SLOT_OUTPUT, ItemStack.EMPTY);
+        pendingInput = ItemStack.EMPTY;
+        refreshIdleStatus();
         setChanged();
     }
 }

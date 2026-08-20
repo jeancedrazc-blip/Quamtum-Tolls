@@ -2,28 +2,40 @@
 
 ## Canonical baseline
 
-- Current project version: **3.0.5**
+- Current project version: **3.0.6-dev.8**
 - Minecraft: **26.1.2**
 - Loader: **NeoForge**
+- Minimum NeoForge declared by the current JAR: **26.1.2.95**
 - Mod id preserved by the current build: `rftoolsbuilder`
-- Canonical JAR: `baseline/QuantumTools-3.0.5.jar`
-- SHA-256: `1ea89fcadeb43b9c78245a082fb26e92471e93a1c0901abee21b02b9fe52b7e7`
-- Internal JAR metadata version: `26.1.2-7.0.5-port.1`
+- Canonical baseline metadata: `baseline/3.0.6-dev.8/BASELINE.json`
+- Canonical JAR identity: `QuantumTools-3.0.6-dev.8.jar`
+- SHA-256: `ba9a16dd48d8229768d8cb927c0fa6b09a1560cec934ab60386afe3944f3f85b`
+- Internal mod metadata version: `3.0.6-dev.8`
+- Compiled classes in canonical JAR: **85**
+- Non-class resources in canonical JAR: **68**
+- Original `.java` files embedded in canonical JAR: **0**
 
 ## Source-of-truth rule
 
+The user supplied the 3.0.6-dev.8 JAR on 2026-08-20 and explicitly approved it as the base for all future Quantum Tools work. It supersedes the former 3.0.5 baseline.
+
 Before changing Quantum Tools in any conversation:
 
-1. Read this file.
-2. Verify the latest repository tag/release/commit.
-3. Verify the canonical baseline hash when the baseline JAR is involved.
-4. Never replace a newer baseline with an older remembered version.
+1. Read this file and `baseline/3.0.6-dev.8/BASELINE.json`.
+2. Treat **3.0.6-dev.8** as the canonical implementation unless the user explicitly approves a newer baseline.
+3. Verify the canonical SHA-256 whenever a candidate baseline JAR is available.
+4. Never replace this baseline with 3.0.5 or another older remembered version.
 5. Never invent missing changelog entries.
 6. Preserve existing behavior unless an explicit change request says otherwise.
+7. Do **not** rebuild unrelated classes from guessed/decompiled Java. The supplied JAR contains no original Java source text, so the unchanged compiled classes are authoritative.
+8. For a future change, reconstruct/edit only the explicitly requested class/resource and preserve every untouched entry from the canonical JAR.
+9. Before accepting a new build, compare changed entries against the intended change set and reject unrelated removals or modifications.
 
-## Current implementation visible in the 3.0.5 baseline
+## Current implementation visible in the 3.0.6-dev.8 baseline
 
-The supplied JAR contains the Builder/Quarry implementation, Quarry Card classes, filter UI/menu classes, Builder UI/menu classes, renderer classes, translations, recipes, models and textures.
+The supplied JAR contains the Builder/Quarry implementation, Quarry Card classes, filter UI/menu classes, Builder UI/menu classes, renderer classes, translations, recipes, models and textures. It also contains the current Constructor/schematic implementation, including construction plan/job classes, schematic loading/upload handling, substitution rules, safe block-entity handling, Constructor networking/UI/rendering and related client classes.
+
+A source-file inventory recovered from class debug metadata is stored at `baseline/3.0.6-dev.8/source_file_summary.txt`.
 
 ## Approved construction-machine direction
 
@@ -50,10 +62,12 @@ The user approved the sci-fi cannon concept shown in the final concept sheet. Tr
 - The muzzle is a dedicated energy emitter, visually distinct from a conventional firearm barrel.
 - The approved concept is a visual reference only; incidental text/spec numbers rendered in the concept image (range, reload, energy naming, etc.) are **not gameplay requirements unless explicitly approved later**.
 
-## Binary baseline storage
+## Baseline storage and integrity
 
-The exact 3.0.5 JAR is preserved losslessly in `baseline/parts/` as ordered Base64 chunks. Run `scripts/restore_baseline.py` to rebuild `baseline/QuantumTools-3.0.5.jar`; the script verifies the SHA-256 above.
+The GitHub connector used in this session cannot directly upload arbitrary local binary ZIP/JAR files. The repository therefore records the canonical binary identity by exact SHA-256 and stores the recovered engineering/source inventory and preservation rules. Do not claim a repository binary is canonical unless its SHA-256 matches the value above.
+
+The complete locally generated engineering baseline for 3.0.6-dev.8 contains the exact supplied JAR, 85 exact compiled classes, 68 exact resources, per-entry hashes, API signatures and `javap` bytecode references. Those artifacts are the reconstruction reference; guessed Java is never allowed to override an unchanged canonical class.
 
 ## Versioning rule
 
-The next release must be created from this verified 3.0.5 baseline and must increment from 3.0.5. Do not reuse 3.0.4 or another earlier build as the implementation base.
+The next release must be created from the verified **3.0.6-dev.8** baseline and must increment from it. Do not reuse 3.0.5 or another earlier build as the implementation base.

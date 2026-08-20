@@ -2,6 +2,7 @@ package mcjty.rftoolsbuilder.constructor;
 
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChiseledBookShelfBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
@@ -37,6 +38,13 @@ public final class ConstructorStateFilterRegistry {
         if (state.hasProperty(BlockStateProperties.WATERLOGGED)) state = state.setValue(BlockStateProperties.WATERLOGGED, false);
         if (state.is(net.minecraft.tags.BlockTags.CAULDRONS)) state = Blocks.CAULDRON.defaultBlockState();
         if (state.getBlock() == Blocks.COMPOSTER) state = Blocks.COMPOSTER.defaultBlockState();
+
+        // A copied occupied bookshelf state would visually duplicate books even though the inventory NBT is stripped.
+        if (state.getBlock() == Blocks.CHISELED_BOOKSHELF) {
+            for (var property : ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES) {
+                if (state.hasProperty(property)) state = state.setValue(property, false);
+            }
+        }
 
         UnaryOperator<BlockState> filter = FILTERS.get(state.getBlock());
         if (filter != null) {

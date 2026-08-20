@@ -6,6 +6,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 public final class ConstructorMenu extends AbstractContainerMenu {
@@ -15,13 +16,31 @@ public final class ConstructorMenu extends AbstractContainerMenu {
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
                 inventory.player.level().getBlockEntity(buffer.readBlockPos()) instanceof ConstructorBlockEntity found ? found : null,
-                new SimpleContainerData(8));
+                new SimpleContainerData(9));
     }
 
     public ConstructorMenu(int id, Inventory inventory, ConstructorBlockEntity constructor, ContainerData data) {
         super(ConstructorBootstrap.CONSTRUCTOR_MENU.get(), id);
         this.constructor = constructor;
         this.data = data;
+
+        if (constructor != null) {
+            addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_SCHEMATIC, 112, 116) {
+                @Override public boolean mayPlace(ItemStack stack) { return stack.getItem() instanceof SchematicCardItem; }
+                @Override public int getMaxStackSize() { return 1; }
+            });
+        }
+
+        int invX = 48;
+        int invY = 178;
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                addSlot(new Slot(inventory, col + row * 9 + 9, invX + col * 18, invY + row * 18));
+            }
+        }
+        for (int col = 0; col < 9; col++) {
+            addSlot(new Slot(inventory, col, invX + col * 18, invY + 58));
+        }
         addDataSlots(data);
     }
 
@@ -35,7 +54,23 @@ public final class ConstructorMenu extends AbstractContainerMenu {
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        return ItemStack.EMPTY;
+        if (index < 0 || index >= slots.size()) return ItemStack.EMPTY;
+        Slot slot = slots.get(index);
+        if (!slot.hasItem()) return ItemStack.EMPTY;
+        ItemStack source = slot.getItem();
+        ItemStack copy = source.copy();
+        int machineSlots = constructor == null ? 0 : 1;
+
+        if (index < machineSlots) {
+            if (!moveItemStackTo(source, machineSlots, slots.size(), true)) return ItemStack.EMPTY;
+        } else if (source.getItem() instanceof SchematicCardItem) {
+            if (!moveItemStackTo(source, 0, 1, false)) return ItemStack.EMPTY;
+        } else {
+            return ItemStack.EMPTY;
+        }
+
+        if (source.isEmpty()) slot.setByPlayer(ItemStack.EMPTY); else slot.setChanged();
+        return copy;
     }
 
     @Override

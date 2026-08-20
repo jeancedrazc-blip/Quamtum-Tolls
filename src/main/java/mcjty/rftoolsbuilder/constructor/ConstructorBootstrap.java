@@ -34,32 +34,22 @@ public final class ConstructorBootstrap {
     private static boolean initialized;
 
     public static final DeferredBlock<ConstructorBlock> CONSTRUCTOR = BLOCKS.registerBlock(
-            "constructor",
-            ConstructorBlock::new,
-            props -> props.strength(5.0f, 12.0f).sound(SoundType.METAL).noOcclusion()
-    );
+            "constructor", ConstructorBlock::new,
+            props -> props.strength(5.0f, 12.0f).sound(SoundType.METAL).noOcclusion());
 
     public static final DeferredBlock<Block> CONSTRUCTOR_TURRET_VISUAL = BLOCKS.registerBlock(
-            "constructor_turret_visual",
-            Block::new,
-            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f)
-    );
+            "constructor_turret_visual", Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f));
     public static final DeferredBlock<Block> CONSTRUCTOR_BARREL_VISUAL = BLOCKS.registerBlock(
-            "constructor_barrel_visual",
-            Block::new,
-            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f)
-    );
+            "constructor_barrel_visual", Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f));
     public static final DeferredBlock<Block> CONSTRUCTOR_ENERGY_VISUAL = BLOCKS.registerBlock(
-            "constructor_energy_visual",
-            Block::new,
-            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
-    );
+            "constructor_energy_visual", Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12));
 
     public static final DeferredBlock<SchematicTableBlock> SCHEMATIC_TABLE = BLOCKS.registerBlock(
-            "schematic_table",
-            SchematicTableBlock::new,
-            props -> props.strength(4.5f, 10.0f).sound(SoundType.METAL).noOcclusion()
-    );
+            "schematic_table", SchematicTableBlock::new,
+            props -> props.strength(4.5f, 10.0f).sound(SoundType.METAL).noOcclusion());
 
     public static final DeferredItem<BlockItem> CONSTRUCTOR_ITEM = ITEMS.registerSimpleBlockItem(CONSTRUCTOR);
     public static final DeferredItem<BlockItem> SCHEMATIC_TABLE_ITEM = ITEMS.registerSimpleBlockItem(SCHEMATIC_TABLE);
@@ -89,8 +79,10 @@ public final class ConstructorBootstrap {
         modBus.addListener(ConstructorBootstrap::addCreativeTabContents);
         modBus.addListener(ConstructorNetworking::registerPayloads);
 
-        // Preview downloads are rate-limited over server ticks instead of
-        // queueing a complete multi-megabyte schematic in one network handler.
+        // Both directions are streamed instead of queueing multi-megabyte files
+        // into one networking callback. Upload cleanup also runs without waiting
+        // for another client packet, so abandoned reservations recover safely.
+        NeoForge.EVENT_BUS.addListener(SchematicUploadManager::serverTick);
         NeoForge.EVENT_BUS.addListener(SchematicPreviewTransferManager::serverTick);
     }
 

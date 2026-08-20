@@ -56,3 +56,5 @@ jobs:
           git add -A
           git commit -m "Reconstruct complete Builder and Quarry source"
           git push origin HEAD:feature/schematic-create-parity-ui
+
+# One-shot transport only; this workflow removes itself after materializing source.

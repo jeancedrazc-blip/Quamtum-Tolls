@@ -16,7 +16,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
                 inventory.player.level().getBlockEntity(buffer.readBlockPos()) instanceof ConstructorBlockEntity found ? found : null,
-                new SimpleContainerData(13));
+                new SimpleContainerData(14));
     }
 
     public ConstructorMenu(int id, Inventory inventory, ConstructorBlockEntity constructor, ContainerData data) {

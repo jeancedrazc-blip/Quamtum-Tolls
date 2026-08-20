@@ -3,39 +3,99 @@ name: Quantum Tools source build
 on:
   push:
     branches:
-      - "source/3.0.6-dev.9-placement-editor-v5sync"
+      - "source/3.0.6-dev.10-constructor-vanilla-blue-clean"
+    paths-ignore:
+      - "ci/**"
+      - "dist/**"
   pull_request:
     branches:
       - "main"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Set up Java 25
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.1'
 
-      - name: Compile Quantum Tools
-        run: gradle build --stacktrace
+      - name: Validate Constructor model JSON
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
 
-      - name: Upload compiled JAR
+          model_dir = Path('src/main/resources/assets/rftoolsbuilder/models/block')
+          names = [
+              'constructor.json',
+              'constructor_turret_visual.json',
+              'constructor_barrel_visual.json',
+              'constructor_energy_visual.json',
+              'constructor_base_energy_visual.json',
+          ]
+          for name in names:
+              data = json.loads((model_dir / name).read_text())
+              for element in data.get('elements', []):
+                  for point in ('from', 'to'):
+                      coords = element[point]
+                      if any(value < -16 or value > 32 for value in coords):
+                          raise SystemExit(f'{name}: element {element.get("name")} has coordinates outside -16..32: {coords}')
+          print('Constructor model JSON validation OK')
+          PY
+
+      - name: Build complete mod from source
+        shell: bash
+        run: |
+          set +e
+          mkdir -p ci dist
+          gradle build --stacktrace > ci/dev10-build.log 2>&1
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "SUCCESS" > ci/dev10-status.txt
+            jar_path="$(find build/libs -maxdepth 1 -type f -name '*.jar' | head -n 1)"
+            test -n "$jar_path"
+            sha256sum "$jar_path" > ci/dev10-artifact.sha256
+            cp "$jar_path" dist/QuantumTools-3.0.6-dev.10-constructor-vanilla-blue.jar
+          else
+            echo "FAILED ($code)" > ci/dev10-status.txt
+            rm -f ci/dev10-artifact.sha256 dist/QuantumTools-3.0.6-dev.10-constructor-vanilla-blue.jar
+          fi
+          exit "$code"
+
+      - name: Persist verified push build
+        if: always() && github.event_name == 'push'
+        shell: bash
+        run: |
+          git config user.name "Quantum Tools CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add ci/dev10-status.txt ci/dev10-build.log
+          if [ -f ci/dev10-artifact.sha256 ]; then
+            git add ci/dev10-artifact.sha256 dist/QuantumTools-3.0.6-dev.10-constructor-vanilla-blue.jar
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish verified dev10 source build"
+            git push origin HEAD:source/3.0.6-dev.10-constructor-vanilla-blue-clean
+          fi
+
+      - name: Upload complete dev10 JAR
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: quantum-tools-3.0.6-dev.9
+          name: quantum-tools-dev10-constructor-vanilla-blue
           path: build/libs/*.jar
           if-no-files-found: error

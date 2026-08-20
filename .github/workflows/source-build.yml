@@ -25,6 +25,31 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.1'
+
+      - name: Restore and validate approved Constructor V5 assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d reconstruction/constructor_v5_assets.tar.gz.base64 > /tmp/constructor-v5-assets.tar.gz
+          tar -xzf /tmp/constructor-v5-assets.tar.gz -C .
+          sha256sum -c <<'EOF'
+          8ecd31fdecc81416444abe0f41029950b9a78eb0bc86fbef13aac69c27553851  src/main/resources/assets/rftoolsbuilder/models/block/constructor_barrel_visual.json
+          b29a1b21e831ab3f9df810a6bd4541812c945caf91310189ba57b90855274f93  src/main/resources/assets/rftoolsbuilder/models/block/constructor.json
+          c50263aa82b31b1d580436153587ea74f7cb7344e485011346472f040d28430e  src/main/resources/assets/rftoolsbuilder/models/block/constructor_turret_visual.json
+          8c6f4bdcb5dee378cd32e82d043e365610a28db0ca96b1e6fd8b828d5fd5c69b  src/main/resources/assets/rftoolsbuilder/models/block/constructor_energy_visual.json
+          2dbef1ab5357ac901eccc28e17cf26046b2b2dbbb61f9140a7ae81f0809ab4e1  src/main/resources/assets/rftoolsbuilder/models/item/constructor.json
+          369181ccb426bd8d27b744984e815c5d84657dc4693e6be6ce7a193bf0c06a99  src/main/resources/assets/rftoolsbuilder/items/constructor.json
+          79688c0ea4f9bbe0a3b11f5836ccbec3de2829c5281affe2514baeac74583aed  src/main/resources/assets/rftoolsbuilder/blockstates/constructor_barrel_visual.json
+          e7fc3063b64a639ba3c6ce02f6b704704f970733e352b7a4e493d8cb90e1d23c  src/main/resources/assets/rftoolsbuilder/blockstates/constructor.json
+          c661ad2c0f9ec54a0e2293664c68aa16daf34b10873f9781b68460637eb83121  src/main/resources/assets/rftoolsbuilder/blockstates/constructor_turret_visual.json
+          e6e0b3c382f5693c6e1cd3172001f85735076399c1a53c8792fb26c4e287ad78  src/main/resources/assets/rftoolsbuilder/blockstates/constructor_energy_visual.json
+          b113bb3c2a2948ceceead73c07b26572f1391757eef237019b7fbab24cecea33  src/main/resources/assets/rftoolsbuilder/textures/block/constructor_cyan.png
+          a6cdf4090a1bb39e04ea280d0d3f9a523074cc1852c6ea967dbecc399d6e7ed0  src/main/resources/assets/rftoolsbuilder/textures/block/constructor_dark.png
+          50d662732e94bc98a82534665d9c0ad77db6f42ea565261c7cff57be62fae19c  src/main/resources/assets/rftoolsbuilder/textures/block/constructor_white.png
+          e8e00e91fd2fa41033a1d903200955bb43b7c6bb5f05a7a83f173d4f14952068  src/main/resources/assets/rftoolsbuilder/textures/block/constructor_metal.png
+          0ea8127158ca2f63be97faf08d96b8270d9eb6498f41a0bcad22d0baf5a6096c  src/main/resources/assets/rftoolsbuilder/textures/block/constructor_vent.png
+          EOF
+
       - name: Compile and publish CI result
         shell: bash
         run: |
@@ -52,10 +77,10 @@ jobs:
 
           git config user.name "Quantum Tools CI"
           git config user.email "actions@users.noreply.github.com"
-          git add -- ci/status.txt ci/build.log
+          git add -- src/main/resources ci/status.txt ci/build.log
           if [ -f ci/quantum-tools-dev9.jar.base64 ]; then git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256; fi
           if ! git diff --cached --quiet; then
-            git commit -m "Record source build result"
+            git commit -m "Sync approved V5 assets and record source build"
             git push origin HEAD:source/3.0.6-dev.9-placement-editor
           fi
           exit "$code"

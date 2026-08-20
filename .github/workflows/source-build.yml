@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "source/3.0.6-dev.9-placement-editor"
+      - "source/3.0.6-dev.9-placement-editor-v5sync"
     paths-ignore:
       - "ci/**"
   workflow_dispatch:
@@ -18,18 +19,30 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Restore approved Constructor V5 assets into source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f reconstruction/constructor-v5-approved-assets.zip ]; then
+            unzip -oq reconstruction/constructor-v5-approved-assets.zip -d src/main/resources
+          fi
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.1'
+
       - name: Compile and publish CI result
         shell: bash
         run: |
           set -u
           mkdir -p ci
+          echo "$GITHUB_SHA" > ci/source_commit.txt
           set +e
           gradle build --stacktrace > ci/build.log 2>&1
           code=$?
@@ -52,10 +65,26 @@ jobs:
 
           git config user.name "Quantum Tools CI"
           git config user.email "actions@users.noreply.github.com"
-          git add -- ci/status.txt ci/build.log
-          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256; fi
+
+          # Source assets restored from the approved V5 package are committed
+          # alongside the validated build result so GitHub remains the source of truth.
+          git add -- src/main/resources/assets/rftoolsbuilder/models/block/constructor.json \
+                    src/main/resources/assets/rftoolsbuilder/models/block/constructor_barrel_visual.json \
+                    src/main/resources/assets/rftoolsbuilder/models/block/constructor_turret_visual.json \
+                    src/main/resources/assets/rftoolsbuilder/models/block/constructor_energy_visual.json \
+                    src/main/resources/assets/rftoolsbuilder/models/item/constructor.json \
+                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_cyan.png \
+                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_dark.png \
+                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_white.png \
+                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_metal.png \
+                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_vent.png \
+                    ci/status.txt ci/build.log ci/source_commit.txt
+          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then
+            git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256
+          fi
+
           if ! git diff --cached --quiet; then
-            git commit -m "Record source build result"
-            git push origin HEAD:source/3.0.6-dev.9-placement-editor
+            git commit -m "Sync approved V5 assets and record source build"
+            git push origin HEAD:"${GITHUB_REF_NAME}"
           fi
           exit "$code"

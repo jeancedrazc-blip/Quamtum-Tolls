@@ -1,0 +1,610 @@
+QUANTUM TOOLS — PADRÃO OBRIGATÓRIO DE DESENVOLVIMENTO, MODELAGEM E VALIDAÇÃO
+================================================================================
+
+Este arquivo define o padrão de trabalho obrigatório para o desenvolvimento do mod Quantum Tools.
+Ele existe para evitar regressões, simplificações indevidas, implementações pela metade, perda de funcionalidades e alterações visuais sem autorização.
+
+A regra principal é simples:
+O resultado desejado tem prioridade sobre o caminho mais rápido, mais simples ou mais curto.
+Nenhuma etapa deve ser tratada como concluída enquanto não estiver realmente pronta, validada e integrada ao restante do mod.
+
+
+1. FONTE OFICIAL E REGRA DE VERDADE DO PROJETO
+-----------------------------------------------
+
+1.1. O código-fonte no GitHub é a base oficial de desenvolvimento.
+
+Depois que uma versão estiver integrada e aprovada, todas as novas alterações devem ser feitas diretamente no projeto-fonte, em src/main/java e src/main/resources.
+O JAR compilado passa a ser produto da compilação e referência de validação, não a base de edição.
+
+1.2. Toda alteração aprovada precisa atualizar o código-fonte.
+
+Não é permitido:
+- entregar apenas um JAR e deixar o fonte desatualizado;
+- alterar classes compiladas sem refletir a alteração no projeto-fonte;
+- manter funcionalidades importantes somente em um patch binário;
+- considerar uma versão como oficial se o GitHub não reproduz essa mesma versão.
+
+1.3. Toda versão considerada estável deve ser compilável a partir do próprio repositório.
+
+O critério mínimo é:
+- dependências resolvidas;
+- Gradle configurado;
+- src/main/java completo para o escopo do mod;
+- src/main/resources completo;
+- build executado com sucesso;
+- JAR gerado pelo próprio projeto;
+- nenhum erro de compilação escondido ou ignorado.
+
+1.4. O código-fonte deve ser atualizado continuamente.
+
+Sempre que houver:
+- nova funcionalidade;
+- correção de bug;
+- mudança de comportamento;
+- nova UI;
+- nova textura;
+- alteração de modelo;
+- mudança de networking;
+- mudança de NBT/dados persistentes;
+- integração com outro mod;
+- alteração de receita, item ou bloco;
+
+o fonte deve ser atualizado na mesma linha de desenvolvimento.
+
+
+2. PROCESSO OBRIGATÓRIO DE TRABALHO — UMA ETAPA POR VEZ
+-------------------------------------------------------
+
+2.1. O desenvolvimento deve seguir um processo de Stage Gate.
+
+Uma etapa só libera a próxima quando estiver concluída.
+Não é permitido avançar deixando pendências conhecidas para "resolver depois".
+
+Fluxo obrigatório:
+
+A. Entender o requisito real.
+B. Inspecionar o código atual e as referências técnicas.
+C. Definir o comportamento esperado.
+D. Implementar somente a etapa atual.
+E. Compilar.
+F. Testar tecnicamente.
+G. Testar no Minecraft quando a alteração depender de comportamento visual ou gameplay.
+H. Comparar com a referência e com o requisito aprovado.
+I. Corrigir tudo o que estiver abaixo do esperado.
+J. Só então marcar a etapa como concluída e passar para a seguinte.
+
+2.2. Uma etapa não está concluída apenas porque "funciona em parte".
+
+Exemplos do que NÃO conta como conclusão:
+- o bloco aparece, mas a forma está errada;
+- o schematic carrega, mas não pode ser posicionado direito;
+- existe lógica de rotate no código, mas o jogador não consegue usar;
+- a UI existe, mas não sincroniza corretamente com o servidor;
+- o preview aparece, mas usa bounds errados;
+- a máquina mira, mas não consome materiais corretamente;
+- o modelo está bonito em preview externo, mas fica ruim no mundo;
+- o código compila, mas a experiência de uso continua quebrada.
+
+2.3. Problemas devem ser resolvidos na ordem de bloqueio.
+
+Primeiro resolver o que impede o uso do sistema.
+Depois resolver integridade de dados e transformação.
+Depois resolver comportamento avançado.
+Depois polimento.
+
+Não se deve gastar tempo em detalhes secundários enquanto uma etapa estrutural ainda está quebrada.
+
+
+3. PADRÃO DE MODELAGEM — NÍVEL VISUAL EXIGIDO
+---------------------------------------------
+
+3.1. A modelagem não deve ser simplificada por conveniência.
+
+A máquina precisa ser modelada de acordo com a referência aprovada, respeitando:
+- silhueta;
+- proporção;
+- distribuição de massa;
+- leitura frontal, lateral, traseira e diagonal;
+- escala no mundo;
+- hierarquia de volumes;
+- partes mecânicas;
+- pivôs;
+- áreas emissivas;
+- acabamento de superfície.
+
+Não é aceitável transformar um design complexo em um "cubo com detalhes".
+
+3.2. A referência visual tem prioridade sobre interpretações genéricas.
+
+Quando existir imagem de referência aprovada, ela deve ser tratada como especificação visual.
+O modelo deve ser comparado com essa imagem de forma objetiva.
+
+Itens a comparar:
+- largura da base;
+- altura total;
+- comprimento do corpo;
+- tamanho da traseira;
+- espessura do canhão;
+- proporção entre base, coluna, pivô e corpo;
+- abertura e formato dos estabilizadores;
+- desenho do muzzle/emissor;
+- posicionamento dos elementos luminosos;
+- densidade de detalhes.
+
+3.3. A modelagem deve ser construída como um sistema multipart quando houver animação.
+
+Para máquinas como a Constructor, partes que precisam de movimento devem ser separadas de maneira lógica.
+Exemplo:
+- base fixa;
+- turret com yaw;
+- barrel com pitch;
+- emissivos separados;
+- muzzle associado ao barrel;
+- pontos de pivô coerentes com a animação real.
+
+O modelo não deve ser montado visualmente de um jeito que impeça posteriormente uma animação correta.
+
+3.4. A modelagem deve respeitar os limites técnicos do formato usado pelo Minecraft.
+
+Antes de entregar:
+- verificar limites de elementos;
+- verificar coordenadas;
+- verificar rotação;
+- verificar pivôs;
+- verificar UVs;
+- verificar texturas referenciadas;
+- verificar modelo de item;
+- verificar blockstate;
+- verificar renderização no mundo.
+
+3.5. Textura não deve esconder modelagem pobre.
+
+Volumes importantes devem existir na geometria quando a forma exige volume.
+Não usar apenas linhas pintadas para simular placas, encaixes ou mecanismos que deveriam ter profundidade.
+
+3.6. Texturas devem ser limpas e coerentes.
+
+Evitar:
+- excesso de riscos;
+- linhas aleatórias;
+- ruído visual sem função;
+- excesso de grid;
+- detalhes que deixam o bloco visualmente sujo;
+- contraste sem hierarquia.
+
+A textura deve complementar a geometria, não competir com ela.
+
+3.7. Emissivos precisam ter função visual clara.
+
+O emissivo deve indicar energia, estado ou direção funcional.
+Não deve ser espalhado aleatoriamente apenas para deixar o bloco "sci-fi".
+
+3.8. O modelo deve ser validado no jogo.
+
+Preview técnico não substitui screenshot no mundo.
+É obrigatório observar:
+- frente;
+- lateral;
+- traseira;
+- diagonal;
+- distância curta;
+- distância média;
+- escala comparada ao jogador e aos blocos próximos.
+
+Se o modelo só funciona em uma câmera específica, ele não está concluído.
+
+3.9. Modelo aprovado fica congelado.
+
+Depois que uma versão visual for aprovada, nenhuma alteração posterior pode modificar essa modelagem sem pedido explícito.
+Correções de programação, schematic, UI ou networking não devem alterar o modelo aprovado.
+
+Para a Constructor, a modelagem V5 aprovada deve ser tratada como visual congelado até nova autorização.
+
+
+4. PADRÃO DE PROGRAMAÇÃO — COMPLETUDE E ARQUITETURA
+--------------------------------------------------
+
+4.1. Não implementar funcionalidades pela metade.
+
+Uma funcionalidade deve incluir tudo que for necessário para funcionar de ponta a ponta.
+Exemplo de uma feature de schematic:
+- leitura;
+- validação;
+- dados persistentes;
+- networking;
+- preview;
+- transformação;
+- UI;
+- confirmação;
+- sincronização servidor/cliente;
+- uso pela Constructor;
+- tratamento de erro.
+
+Não basta existir uma classe com métodos que nunca chegam ao jogador.
+
+4.2. Não procurar a solução mais simples quando ela muda o resultado desejado.
+
+Simplicidade é aceitável somente quando preserva completamente:
+- comportamento;
+- qualidade;
+- segurança;
+- compatibilidade;
+- experiência de uso.
+
+Se a solução simples corta requisitos, ela não deve ser usada.
+
+4.3. Não substituir arquitetura robusta por atalho.
+
+Quando uma referência técnica como Create, Oritech, Mekanism ou outro mod é fornecida, a referência deve ser estudada para entender:
+- separação de responsabilidades;
+- fluxo de dados;
+- rendering;
+- networking;
+- sincronização;
+- armazenamento;
+- validação;
+- experiência de usuário.
+
+Não copiar cegamente e não simplificar até perder o comportamento que motivou a referência.
+
+4.4. Toda alteração deve respeitar o que já funciona.
+
+Antes de alterar uma classe:
+- identificar dependências;
+- identificar chamadas externas;
+- identificar dados persistentes;
+- identificar packets;
+- identificar renderers;
+- identificar menus/screens;
+- identificar comportamento servidor/cliente.
+
+Mudanças devem ser localizadas sempre que possível.
+Não reescrever sistemas inteiros sem necessidade.
+
+4.5. Não remover comportamento existente sem autorização.
+
+Se uma feature antiga existe e não foi explicitamente substituída, ela deve ser preservada.
+
+4.6. Não deixar placeholders.
+
+É proibido considerar uma entrega concluída contendo:
+- TODO de funcionalidade essencial;
+- fake implementation;
+- retorno constante temporário;
+- método vazio usado como "stub";
+- asset provisório;
+- UI provisória;
+- textura provisória;
+- comportamento de teste em produção.
+
+4.7. O servidor deve ser autoridade para ações que alteram o mundo.
+
+Preview e UI podem existir no cliente, mas placement, validação, consumo, execução da máquina e dados persistentes relevantes devem ser confirmados pelo servidor.
+
+4.8. Networking precisa ser validado.
+
+Para cada packet:
+- validar origem;
+- validar slot/item quando aplicável;
+- validar payload;
+- validar hash/identidade quando aplicável;
+- validar bounds;
+- validar limites numéricos;
+- não confiar cegamente no cliente.
+
+4.9. Dados persistentes devem ser versionados quando necessário.
+
+Mudanças de schema em ItemStack, BlockEntity ou arquivos precisam considerar migração e compatibilidade com versões anteriores quando isso for relevante.
+
+
+5. SCHEMATIC — FLUXO OBRIGATÓRIO
+-------------------------------
+
+O schematic deve ser tratado como um pipeline completo, e não como "abrir NBT e colocar blocos".
+
+Fluxo esperado:
+
+arquivo local
+→ seleção na Schematic Table
+→ upload validado
+→ hash/identidade
+→ armazenamento autorizado no servidor
+→ parse pelo adapter do formato
+→ ConstructionPlan neutro
+→ preservação de bounds e origem
+→ preview/holograma
+→ Placement Editor
+→ transformações
+→ confirmação
+→ sincronização com servidor
+→ cartão deployed
+→ Constructor lê o plano confirmado
+→ valida materiais/energia/alcance
+→ mira
+→ dispara
+→ posiciona
+→ persiste progresso
+
+5.1. Formatos devem ser tratados por adapters claros.
+
+Quando houver suporte a diferentes formatos, cada um precisa preservar corretamente os dados que expõe.
+Exemplos:
+- Create/Vanilla NBT;
+- Sponge .schem;
+- Litematica .litematic;
+- legacy .schematic.
+
+5.2. Bounds não podem ser inferidos de maneira que altere o posicionamento original.
+
+Quando o formato declara tamanho/origem, esses dados precisam ser preservados mesmo que existam áreas vazias nas bordas.
+
+5.3. Preview precisa usar a mesma transformação lógica usada na execução.
+
+Não pode existir um transform para o holograma e outro diferente para a Constructor.
+Rotate, mirror e anchor precisam produzir o mesmo resultado em ambos.
+
+
+6. PLACEMENT EDITOR — REQUISITOS OBRIGATÓRIOS
+---------------------------------------------
+
+6.1. Não usar atalhos de teclado como fluxo principal.
+
+O mod convive com muitos outros mods e keybinds podem entrar em conflito.
+O Placement Editor deve ser controlado por interface e mouse.
+
+Não registrar atalhos obrigatórios como G, R, M ou Shift+Scroll para funções essenciais do schematic.
+
+6.2. O schematic não pode seguir a mira continuamente enquanto está sendo editado.
+
+A mira pode ser usada para escolher a posição inicial.
+Depois disso, o anchor deve ficar fixo até o usuário alterar conscientemente a posição.
+
+6.3. O editor deve permitir movimentação precisa.
+
+Controles mínimos:
+- X -1 / +1;
+- Y -1 / +1;
+- Z -1 / +1;
+- passos maiores para estruturas grandes, como -10 / +10;
+- reposicionar na mira;
+- centralizar/reposicionar de maneira explícita;
+- resetar transformações.
+
+6.4. Rotação precisa estar disponível pela UI.
+
+Estados esperados:
+- 0°;
+- 90°;
+- 180°;
+- 270°.
+
+6.5. Mirror precisa estar disponível pela UI.
+
+Estados esperados:
+- None;
+- eixo X/Left-Right;
+- eixo Z/Front-Back.
+
+6.6. O editor deve mostrar informações úteis.
+
+No mínimo:
+- anchor X/Y/Z atual;
+- rotação atual;
+- mirror atual;
+- dimensões do schematic;
+- estado de confirmação.
+
+6.7. Alterações devem atualizar o holograma imediatamente.
+
+Clicar em um controle deve produzir feedback visual no mundo sem depender de fechar e reabrir a tela.
+
+6.8. Confirmar e cancelar precisam ser explícitos.
+
+Confirmar:
+- grava anchor/rotation/mirror no cartão;
+- sincroniza com servidor;
+- marca como deployed;
+- fecha edição.
+
+Cancelar:
+- não deve deixar estado parcial inconsistente;
+- deve restaurar o deployment anterior quando apropriado.
+
+Clear Deployment:
+- limpa anchor/rotation/mirror/deployed de maneira intencional;
+- sincroniza com o servidor.
+
+
+7. UI/UX — PADRÃO DE QUALIDADE
+------------------------------
+
+7.1. A UI não deve existir apenas para dizer que existe.
+Ela deve permitir concluir a tarefa sem depender de comandos ocultos.
+
+7.2. Controles precisam ter leitura clara.
+
+Evitar:
+- labels ambíguas;
+- botões sem estado;
+- ações escondidas;
+- dependência de chat para instruções essenciais;
+- fluxo que exige decorar teclas.
+
+7.3. A interface deve preservar o máximo possível da visibilidade do holograma.
+
+Para Placement Editor, preferir painel compacto/lateral em vez de tela que bloqueie totalmente a visualização da construção.
+
+7.4. Toda ação relevante deve ter feedback.
+
+Exemplos:
+- posição alterada;
+- rotate alterado;
+- mirror alterado;
+- deployment confirmado;
+- erro de schematic;
+- upload rejeitado;
+- arquivo inválido.
+
+
+8. VALIDAÇÃO OBRIGATÓRIA ANTES DE ENTREGA
+-----------------------------------------
+
+8.1. Compilação.
+
+Nenhuma build deve ser entregue sem build bem-sucedido.
+
+8.2. Validação estrutural.
+
+Verificar:
+- classes alteradas;
+- resources alterados;
+- arquivos removidos;
+- alterações não intencionais;
+- dependências;
+- metadados do mod.
+
+8.3. Validação visual.
+
+Para modelagem, textura, renderer e UI:
+- testar no Minecraft;
+- comparar screenshots;
+- confirmar que a referência aprovada foi preservada.
+
+8.4. Validação funcional.
+
+Para schematic/Constructor:
+- selecionar arquivo;
+- escrever card;
+- carregar preview;
+- abrir editor;
+- mover X/Y/Z;
+- rotacionar;
+- espelhar;
+- confirmar;
+- verificar estado do cartão;
+- inserir na Constructor;
+- verificar leitura do plano;
+- testar energia;
+- testar materiais;
+- testar execução;
+- testar pausa/retomada;
+- testar persistência;
+- testar erro e recuperação.
+
+8.5. Regressão.
+
+Depois de uma mudança nova, testar o que já estava aprovado.
+Uma correção não pode destruir modelagem, UI ou funcionalidade anterior.
+
+
+9. DEFINIÇÃO DE "CONCLUÍDO"
+---------------------------
+
+Uma etapa só pode ser chamada de concluída quando:
+
+- o requisito foi implementado integralmente;
+- o código compila;
+- não existem placeholders essenciais;
+- a UI permite usar a função;
+- cliente e servidor estão sincronizados;
+- dados persistem corretamente quando necessário;
+- o comportamento foi testado;
+- a referência foi respeitada;
+- não houve regressão conhecida;
+- o código-fonte no GitHub corresponde à build;
+- a versão aprovada está registrada em commit.
+
+Se qualquer um desses pontos falhar, a etapa continua aberta.
+
+
+10. O QUE NÃO DEVE SER FEITO
+----------------------------
+
+É proibido como prática de desenvolvimento deste projeto:
+
+- simplificar requisito sem autorização;
+- escolher caminho mais rápido se ele reduz qualidade;
+- entregar feature parcialmente funcional como concluída;
+- criar modelo genérico quando existe referência específica;
+- transformar máquina complexa em cubos sem silhueta correta;
+- usar textura para esconder falta de geometria;
+- poluir textura com riscos aleatórios;
+- mudar modelo aprovado enquanto corrige programação;
+- reescrever partes que já funcionam sem necessidade;
+- remover funcionalidade antiga silenciosamente;
+- criar atalhos de teclado obrigatórios que conflitam com outros mods;
+- depender de keybind para uma função que deve estar na UI;
+- deixar o schematic seguindo a mira de forma incontrolável;
+- criar rotate/mirror no código sem disponibilizar controle real ao jogador;
+- alterar bounds para caber apenas nos blocos ocupados quando o formato declara volume;
+- usar transform diferente no preview e na construção;
+- confiar em payload do cliente sem validação do servidor;
+- entregar JAR sem atualizar o código-fonte;
+- considerar build compilável quando o Gradle ainda falha;
+- esconder erro de compilação;
+- usar placeholder visual ou lógico e chamar de versão final;
+- pular para a próxima etapa enquanto a atual ainda tem defeitos conhecidos.
+
+
+11. REFERÊNCIAS TÉCNICAS
+------------------------
+
+Quando forem fornecidos mods de referência, eles devem ser usados para estudar soluções técnicas e qualidade, não para copiar superficialmente.
+
+Create:
+- schematic pipeline;
+- deployment;
+- transformações;
+- preview;
+- upload e separação cliente/servidor.
+
+Oritech:
+- disciplina de modelagem de máquinas;
+- organização de assets;
+- acabamento visual;
+- proporção e leitura mecânica.
+
+Mekanism/Pipez e outros quando fornecidos:
+- integração;
+- capabilities/transfers;
+- UI;
+- upgrades;
+- compatibilidade entre mods.
+
+A referência deve ser entendida antes de implementar.
+
+
+12. VERSIONAMENTO E GITHUB
+--------------------------
+
+12.1. Trabalhar em branch para alterações relevantes.
+
+12.2. Compilar e validar antes de promover para main.
+
+12.3. Main deve representar uma base utilizável e compilável.
+
+12.4. Commits devem explicar a mudança real.
+
+12.5. Depois da aprovação, promover código, resources e documentação juntos.
+
+12.6. Não manter duas verdades diferentes entre JAR e fonte.
+
+
+13. REGRA FINAL
+---------------
+
+O padrão deste projeto não é "funcionar de algum jeito".
+O padrão é atingir o comportamento e a qualidade definidos para a feature.
+
+Quando houver dúvida entre:
+- solução rápida e solução correta;
+- modelo genérico e modelo fiel;
+- implementação parcial e fluxo completo;
+- atalho oculto e UI apropriada;
+
+a escolha deve ser a solução correta, fiel, completa e utilizável.
+
+Nenhuma simplificação que altere o resultado desejado deve ser feita sem autorização explícita.
+
+Fim do padrão obrigatório.

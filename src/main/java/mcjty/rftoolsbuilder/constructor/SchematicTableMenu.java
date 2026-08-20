@@ -31,26 +31,26 @@ public final class SchematicTableMenu extends AbstractContainerMenu {
         this.blockPos = table == null ? BlockPos.ZERO : table.getBlockPos();
 
         if (table != null) {
-            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_INPUT, 25, 58) {
+            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_INPUT, 25, 64) {
                 @Override public boolean mayPlace(ItemStack stack) { return stack.getItem() instanceof SchematicCardItem && !table.isUploading(); }
                 @Override public boolean mayPickup(Player player) { return !table.isUploading(); }
                 @Override public int getMaxStackSize() { return 1; }
             });
-            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_OUTPUT, 226, 58) {
+            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_OUTPUT, 255, 64) {
                 @Override public boolean mayPlace(ItemStack stack) { return false; }
                 @Override public int getMaxStackSize() { return 1; }
             });
         }
 
-        int invX = 55;
-        int invY = 146;
+        int invX = 67;
+        int invY = 174;
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 addSlot(new Slot(inventory, col + row * 9 + 9, invX + col * 18, invY + row * 18));
             }
         }
         for (int col = 0; col < 9; col++) {
-            addSlot(new Slot(inventory, col, invX + col * 18, invY + 58));
+            addSlot(new Slot(inventory, col, invX + col * 18, 232));
         }
         addDataSlots(data);
     }

@@ -4,13 +4,20 @@ on:
   push:
     branches:
       - "source/3.0.6-dev.9-placement-editor"
+    paths-ignore:
+      - "ci/**"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -18,10 +25,37 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.1'
-      - name: Compile Quantum Tools source
-        run: gradle build --stacktrace
-      - uses: actions/upload-artifact@v4
-        if: success()
-        with:
-          name: quantum-tools-dev9-placement-editor
-          path: build/libs/*.jar
+      - name: Compile and publish CI result
+        shell: bash
+        run: |
+          set -u
+          mkdir -p ci
+          set +e
+          gradle build --stacktrace > ci/build.log 2>&1
+          code=$?
+          set -e
+
+          if [ "$code" -eq 0 ]; then
+            echo "SUCCESS" > ci/status.txt
+            jar_path="$(find build/libs -maxdepth 1 -type f -name '*.jar' | head -n 1)"
+            if [ -z "$jar_path" ]; then
+              echo "BUILD SUCCEEDED BUT NO JAR FOUND" > ci/status.txt
+              code=2
+            else
+              base64 -w 0 "$jar_path" > ci/quantum-tools-dev9.jar.base64
+              sha256sum "$jar_path" > ci/artifact.sha256
+            fi
+          else
+            echo "FAILED ($code)" > ci/status.txt
+            rm -f ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256
+          fi
+
+          git config user.name "Quantum Tools CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add -- ci/status.txt ci/build.log
+          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256; fi
+          if ! git diff --cached --quiet; then
+            git commit -m "Record source build result"
+            git push origin HEAD:source/3.0.6-dev.9-placement-editor
+          fi
+          exit "$code"

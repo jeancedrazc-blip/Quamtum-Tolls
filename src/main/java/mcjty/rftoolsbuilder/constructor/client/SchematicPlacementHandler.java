@@ -148,7 +148,7 @@ public final class SchematicPlacementHandler {
         int mirror = deployed ? editMirror : 0;
         SchematicCardItem.setDeployment(card, anchor, rotation, mirror, deployed);
         ClientPacketDistributor.sendToServer(new ConstructorNetworking.SyncDeployment(
-                mc.player.getInventory().selected, anchor, rotation, mirror, deployed, SchematicCardItem.sha256(card)));
+                mc.player.getInventory().getSelectedSlot(), anchor, rotation, mirror, deployed, SchematicCardItem.sha256(card)));
     }
 
     private static void ensurePlan(ItemStack card) {

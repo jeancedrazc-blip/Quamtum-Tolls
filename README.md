@@ -1,17 +1,33 @@
 # Quantum Tools
 
-Canonical repository baseline for the Minecraft 26.1.2 NeoForge mod **Quantum Tools**.
+Source repository for the Minecraft **26.1.2 / NeoForge** mod **Quantum Tools**.
 
-## Current project version
+## Current development state
 
-- Project version: **3.0.5**
+- Source version: **3.0.6-dev.9**
 - Minecraft: **26.1.2**
-- Loader: **NeoForge**
-- Canonical baseline artifact: `baseline/QuantumTools-3.0.5.jar`
-- SHA-256: `1ea89fcadeb43b9c78245a082fb26e92471e93a1c0901abee21b02b9fe52b7e7`
+- NeoForge: **26.1.2.95**
+- Java toolchain: **25**
+- Mod id: `rftoolsbuilder`
+- Editable source: `src/main/java`
+- Assets/resources: `src/main/resources`
 
-The JAR's internal `neoforge.mods.toml` still reports `26.1.2-7.0.5-port.1`. That internal metadata is historical and does **not** override the project version 3.0.5 confirmed for this baseline.
+The repository source is the development base. New features, fixes, models, textures, UIs and networking changes must be committed to source; a compiled JAR must not become a separate source of truth.
 
-The exact baseline binary is stored in `baseline/parts/` as Base64 chunks because the connected GitHub API does not expose direct binary file upload. Run `scripts/restore_baseline.py` to reconstruct the JAR and verify its checksum.
+## Constructor
 
-Before any new development, read `PROJECT_STATE.md` and verify the baseline hash.
+The approved Constructor V5 visual is stored directly in `src/main/resources` and is frozen unless a new visual change is explicitly requested.
+
+The current schematic placement flow uses a mouse/UI-driven `SchematicPlacementScreen` rather than mandatory keybinds. It supports precise X/Y/Z nudging, rotation, mirror, repositioning, reset, confirm, cancel and clear deployment while keeping the hologram visible in the world.
+
+## Development standard
+
+Read `PADRAO_DE_DESENVOLVIMENTO_QUANTUM_TOOLS.txt` before making changes. It defines the required stage-gate process, modeling quality, schematic workflow, validation rules, definition of done and prohibited shortcuts.
+
+## Build
+
+```bash
+gradle build
+```
+
+A change is not considered complete until the source compiles successfully and the relevant behavior is validated in Minecraft.

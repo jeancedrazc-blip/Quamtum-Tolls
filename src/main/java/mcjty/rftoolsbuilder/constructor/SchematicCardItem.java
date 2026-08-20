@@ -32,22 +32,24 @@ public final class SchematicCardItem extends Item {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
     }
 
-    public static void setSource(ItemStack stack, String fileName, String sourceType) {
+    public static void setSource(ItemStack stack, String displayName, String sourceFile, String sourceType) {
         CompoundTag tag = root(stack);
-        String safeName = fileName == null ? "" : fileName;
+        String safeName = displayName == null ? "" : displayName;
+        String safeFile = sourceFile == null ? "" : sourceFile;
         String safeType = sourceType == null ? "" : sourceType;
         tag.putString(P + "SourceType", safeType);
         tag.putString(P + "SourceName", safeName);
-        tag.putString(P + "SourceFile", safeName);
-
-        // The table is now only a file writer/browser. Rewriting a card must not
-        // silently keep dev.4 placement transforms from a previous schematic.
+        tag.putString(P + "SourceFile", safeFile);
         tag.putInt(P + "Rotation", 0);
         tag.putInt(P + "Mirror", 0);
         tag.putInt(P + "OffsetX", 0);
         tag.putInt(P + "OffsetY", 0);
         tag.putInt(P + "OffsetZ", 0);
         saveRoot(stack, tag);
+    }
+
+    public static void setSource(ItemStack stack, String fileName, String sourceType) {
+        setSource(stack, fileName, fileName, sourceType);
     }
 
     public static boolean hasSource(ItemStack stack) {

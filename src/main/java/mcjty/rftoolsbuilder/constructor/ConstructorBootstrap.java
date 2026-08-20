@@ -12,6 +12,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredBlock;
@@ -87,6 +88,10 @@ public final class ConstructorBootstrap {
         modBus.addListener(ConstructorBootstrap::registerCapabilities);
         modBus.addListener(ConstructorBootstrap::addCreativeTabContents);
         modBus.addListener(ConstructorNetworking::registerPayloads);
+
+        // Preview downloads are rate-limited over server ticks instead of
+        // queueing a complete multi-megabyte schematic in one network handler.
+        NeoForge.EVENT_BUS.addListener(SchematicPreviewTransferManager::serverTick);
     }
 
     private static void registerCapabilities(RegisterCapabilitiesEvent event) {

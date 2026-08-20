@@ -63,7 +63,6 @@ final class ConstructorEntityDataCompat {
 
         Entity entity;
         try {
-            EntityType<?> ignored = null; // Keeps the loader path explicit for mapping diagnostics.
             entity = EntityType.loadEntityRecursive(
                     TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), data),
                     level,

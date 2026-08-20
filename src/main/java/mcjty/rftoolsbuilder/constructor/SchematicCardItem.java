@@ -32,6 +32,31 @@ public final class SchematicCardItem extends Item {
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
     }
 
+    public static void setSource(ItemStack stack, String fileName, String sourceType) {
+        CompoundTag tag = root(stack);
+        tag.putString(P + "SourceType", sourceType == null ? "" : sourceType);
+        tag.putString(P + "SourceName", fileName == null ? "" : fileName);
+        tag.putString(P + "SourceFile", fileName == null ? "" : fileName);
+        saveRoot(stack, tag);
+    }
+
+    public static boolean hasSource(ItemStack stack) {
+        return !sourceFile(stack).isBlank() && !sourceType(stack).isBlank();
+    }
+
+    public static String sourceName(ItemStack stack) {
+        String value = root(stack).getString(P + "SourceName").orElse("");
+        return value.isBlank() ? "Empty Schematic Card" : value;
+    }
+
+    public static String sourceFile(ItemStack stack) {
+        return root(stack).getString(P + "SourceFile").orElse("");
+    }
+
+    public static String sourceType(ItemStack stack) {
+        return root(stack).getString(P + "SourceType").orElse("");
+    }
+
     public static int rotation(ItemStack stack) {
         return Math.floorMod(root(stack).getIntOr(P + "Rotation", 0), 4);
     }
@@ -52,17 +77,6 @@ public final class SchematicCardItem extends Item {
         tag.putInt(P + "OffsetY", clampOffset(y));
         tag.putInt(P + "OffsetZ", clampOffset(z));
         saveRoot(stack, tag);
-    }
-
-    public static void markTestPattern(ItemStack stack) {
-        CompoundTag tag = root(stack);
-        tag.putString(P + "SourceType", "test_pattern");
-        tag.putString(P + "SourceName", "Constructor test wall");
-        saveRoot(stack, tag);
-    }
-
-    public static String sourceName(ItemStack stack) {
-        return root(stack).getString(P + "SourceName").orElse("Empty schematic");
     }
 
     public static int replacementCount(ItemStack stack) {
@@ -113,9 +127,7 @@ public final class SchematicCardItem extends Item {
         for (int i = 0; i < count; i++) {
             String fromString = tag.getString(P + "ReplacementFrom" + i).orElse("");
             String toString = tag.getString(P + "ReplacementTo" + i).orElse("");
-            if (fromString.isEmpty() || toString.isEmpty()) {
-                continue;
-            }
+            if (fromString.isEmpty() || toString.isEmpty()) continue;
             try {
                 Block from = BuiltInRegistries.BLOCK.getValue(Identifier.parse(fromString));
                 Block to = BuiltInRegistries.BLOCK.getValue(Identifier.parse(toString));
@@ -133,13 +145,16 @@ public final class SchematicCardItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, TooltipDisplay display, Consumer<Component> text, TooltipFlag flag) {
-        text.accept(Component.literal(sourceName(stack)));
-        text.accept(Component.literal("Rotation: " + (rotation(stack) * 90) + "°"));
-        text.accept(Component.literal("Mirror: " + switch (mirror(stack)) { case 1 -> "X"; case 2 -> "Z"; default -> "Off"; }));
-        text.accept(Component.literal("Offset: " + offsetX(stack) + ", " + offsetY(stack) + ", " + offsetZ(stack)));
-        int replacements = replacementCount(stack);
-        if (replacements > 0) {
-            text.accept(Component.literal("Replacements: " + replacements));
+        if (!hasSource(stack)) {
+            text.accept(Component.literal("Empty — write a schematic at the Schematic Table"));
+            return;
         }
+        text.accept(Component.literal(sourceName(stack)));
+        text.accept(Component.literal("Format: " + switch (sourceType(stack)) {
+            case "create_nbt" -> "Create / Vanilla NBT";
+            default -> sourceType(stack);
+        }));
+        int replacements = replacementCount(stack);
+        if (replacements > 0) text.accept(Component.literal("Replacements: " + replacements));
     }
 }

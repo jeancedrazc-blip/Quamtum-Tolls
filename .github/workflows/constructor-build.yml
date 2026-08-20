@@ -1,8 +1,10 @@
-name: Constructor foundation build
+name: Constructor pipeline build
 
 on:
   push:
-    branches: [ "agent/constructor-foundation" ]
+    branches:
+      - "agent/constructor-foundation"
+      - "agent/schematic-pipeline-refactor"
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:

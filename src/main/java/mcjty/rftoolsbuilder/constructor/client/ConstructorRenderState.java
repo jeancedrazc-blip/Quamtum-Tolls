@@ -3,12 +3,14 @@ package mcjty.rftoolsbuilder.constructor.client;
 import mcjty.rftoolsbuilder.constructor.ConstructorStatus;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.item.ItemStackRenderState;
 
 public final class ConstructorRenderState extends BlockEntityRenderState {
     public final BlockModelRenderState turret = new BlockModelRenderState();
     public final BlockModelRenderState barrel = new BlockModelRenderState();
     public final BlockModelRenderState energyChannel = new BlockModelRenderState();
-    public final BlockModelRenderState projectile = new BlockModelRenderState();
+    public final BlockModelRenderState blockProjectile = new BlockModelRenderState();
+    public final ItemStackRenderState itemProjectile = new ItemStackRenderState();
 
     public float targetYaw;
     public float targetPitch;
@@ -23,5 +25,6 @@ public final class ConstructorRenderState extends BlockEntityRenderState {
     public boolean initialized;
     public boolean hasTarget;
     public boolean projectileVisible;
+    public boolean projectileIsItem;
     public ConstructorStatus status = ConstructorStatus.IDLE;
 }

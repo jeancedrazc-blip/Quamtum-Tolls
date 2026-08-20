@@ -36,8 +36,7 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
     private UUID uploader;
 
     private final ContainerData data = new ContainerData() {
-        @Override
-        public int get(int index) {
+        @Override public int get(int index) {
             return switch (index) {
                 case 0 -> status;
                 case 1 -> uploadProgress;
@@ -46,15 +45,11 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
                 default -> 0;
             };
         }
-
-        @Override
-        public void set(int index, int value) {
+        @Override public void set(int index, int value) {
             if (index == 0) status = value;
             if (index == 1) uploadProgress = value;
         }
-
-        @Override
-        public int getCount() { return 4; }
+        @Override public int getCount() { return 4; }
     };
 
     public SchematicTableBlockEntity(BlockPos pos, BlockState state) {
@@ -99,11 +94,13 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
         syncBlock();
     }
 
-    public void finishUpload(String displayName, String serverRelativeFile, String formatId) {
+    public void finishUpload(String displayName, String serverRelativeFile, String clientRelativeFile,
+                             String formatId, String sha256, int sizeX, int sizeY, int sizeZ) {
         if (!isUploading() || pendingInput.isEmpty()) return;
         ItemStack result = pendingInput.copy();
         result.setCount(1);
-        SchematicCardItem.setSource(result, displayName, serverRelativeFile, formatId);
+        SchematicCardItem.setSource(result, displayName, serverRelativeFile, clientRelativeFile,
+                formatId, sha256, sizeX, sizeY, sizeZ);
         items.set(SLOT_OUTPUT, result);
         pendingInput = ItemStack.EMPTY;
         status = STATUS_FINISHED;

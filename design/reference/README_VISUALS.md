@@ -1,0 +1,1 @@
+Reference images to be stored in this folder are optimized copies of the exact approved concept boards. Source-image SHA-256 hashes are in REFERENCE_MANIFEST.md. These are design references, not runtime textures.

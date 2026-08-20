@@ -15,8 +15,9 @@ import java.util.Map;
 
 /**
  * Format-neutral schematic consumed by both preview and Constructor printing.
- * Every adapter is normalized to one zero-based coordinate space so transforms
- * are identical regardless of the source file format.
+ * Every adapter is normalized to one zero-based coordinate space. When a format
+ * exposes declared bounds, those bounds are preserved even if their outer
+ * layers contain only air.
  */
 public final class ConstructionPlan {
     private final List<ConstructionEntry> entries;
@@ -30,74 +31,67 @@ public final class ConstructionPlan {
     }
 
     public ConstructionPlan(List<ConstructionEntry> sourceEntries, List<ConstructionEntityEntry> sourceEntities) {
-        ArrayList<ConstructionEntry> blockSource = new ArrayList<>();
-        if (sourceEntries != null) {
-            for (ConstructionEntry entry : sourceEntries) {
-                if (entry != null && entry.relativePos() != null && entry.sourceState() != null) blockSource.add(entry);
-            }
-        }
-
-        ArrayList<ConstructionEntityEntry> entitySource = new ArrayList<>();
-        if (sourceEntities != null) {
-            for (ConstructionEntityEntry entity : sourceEntities) {
-                if (entity != null && entity.relativePos() != null && entity.entityData() != null) entitySource.add(entity);
-            }
-        }
-
-        if (blockSource.isEmpty() && entitySource.isEmpty()) {
+        Bounds inferred = inferBounds(sourceEntries, sourceEntities);
+        if (inferred == null) {
             entries = List.of();
             entities = List.of();
             sizeX = sizeY = sizeZ = 0;
             return;
         }
+        Normalized normalized = normalize(sourceEntries, sourceEntities, inferred.min(), inferred.sizeX(), inferred.sizeY(), inferred.sizeZ());
+        entries = normalized.blocks();
+        entities = normalized.entities();
+        sizeX = inferred.sizeX();
+        sizeY = inferred.sizeY();
+        sizeZ = inferred.sizeZ();
+    }
 
-        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+    /**
+     * Construct a plan with bounds declared by the source format. sourceMin is
+     * the minimum occupied coordinate of the declared cuboid, not necessarily
+     * the first non-air block.
+     */
+    public ConstructionPlan(List<ConstructionEntry> sourceEntries, List<ConstructionEntityEntry> sourceEntities,
+                            BlockPos sourceMin, int declaredSizeX, int declaredSizeY, int declaredSizeZ) {
+        if (sourceMin == null) sourceMin = BlockPos.ZERO;
+        if (declaredSizeX < 0 || declaredSizeY < 0 || declaredSizeZ < 0)
+            throw new IllegalArgumentException("Negative schematic bounds");
 
-        for (ConstructionEntry entry : blockSource) {
-            BlockPos p = entry.relativePos();
-            minX = Math.min(minX, p.getX());
-            minY = Math.min(minY, p.getY());
-            minZ = Math.min(minZ, p.getZ());
-            maxX = Math.max(maxX, p.getX());
-            maxY = Math.max(maxY, p.getY());
-            maxZ = Math.max(maxZ, p.getZ());
+        Normalized normalized = normalize(sourceEntries, sourceEntities, sourceMin,
+                declaredSizeX, declaredSizeY, declaredSizeZ);
+        entries = normalized.blocks();
+        entities = normalized.entities();
+        sizeX = declaredSizeX;
+        sizeY = declaredSizeY;
+        sizeZ = declaredSizeZ;
+    }
+
+    private static Normalized normalize(List<ConstructionEntry> sourceEntries,
+                                        List<ConstructionEntityEntry> sourceEntities,
+                                        BlockPos min, int sx, int sy, int sz) {
+        ArrayList<ConstructionEntry> blocks = new ArrayList<>();
+        if (sourceEntries != null) {
+            for (ConstructionEntry entry : sourceEntries) {
+                if (entry == null || entry.relativePos() == null || entry.sourceState() == null) continue;
+                BlockPos p = entry.relativePos();
+                blocks.add(new ConstructionEntry(
+                        new BlockPos(p.getX() - min.getX(), p.getY() - min.getY(), p.getZ() - min.getZ()),
+                        entry.sourceState(), entry.blockEntityDataCopy()));
+            }
         }
 
-        for (ConstructionEntityEntry entity : entitySource) {
-            Vec3 p = entity.relativePos();
-            int x = floor(p.x);
-            int y = floor(p.y);
-            int z = floor(p.z);
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            minZ = Math.min(minZ, z);
-            maxX = Math.max(maxX, x);
-            maxY = Math.max(maxY, y);
-            maxZ = Math.max(maxZ, z);
+        ArrayList<ConstructionEntityEntry> normalizedEntities = new ArrayList<>();
+        if (sourceEntities != null) {
+            for (ConstructionEntityEntry entity : sourceEntities) {
+                if (entity == null || entity.relativePos() == null || entity.entityData() == null) continue;
+                Vec3 p = entity.relativePos();
+                normalizedEntities.add(new ConstructionEntityEntry(
+                        new Vec3(p.x - min.getX(), p.y - min.getY(), p.z - min.getZ()),
+                        entity.entityDataCopy()));
+            }
         }
 
-        ArrayList<ConstructionEntry> normalizedBlocks = new ArrayList<>(blockSource.size());
-        for (ConstructionEntry entry : blockSource) {
-            BlockPos p = entry.relativePos();
-            normalizedBlocks.add(new ConstructionEntry(
-                    new BlockPos(p.getX() - minX, p.getY() - minY, p.getZ() - minZ),
-                    entry.sourceState(),
-                    entry.blockEntityDataCopy()
-            ));
-        }
-
-        ArrayList<ConstructionEntityEntry> normalizedEntities = new ArrayList<>(entitySource.size());
-        for (ConstructionEntityEntry entity : entitySource) {
-            Vec3 p = entity.relativePos();
-            normalizedEntities.add(new ConstructionEntityEntry(
-                    new Vec3(p.x - minX, p.y - minY, p.z - minZ),
-                    entity.entityDataCopy()
-            ));
-        }
-
-        // Same primary scan order used by Create's printer: X fastest, then Z, then Y.
-        normalizedBlocks.sort(Comparator
+        blocks.sort(Comparator
                 .comparingInt((ConstructionEntry e) -> e.relativePos().getY())
                 .thenComparingInt(e -> e.relativePos().getZ())
                 .thenComparingInt(e -> e.relativePos().getX()));
@@ -106,16 +100,39 @@ public final class ConstructionPlan {
                 .thenComparingDouble(e -> e.relativePos().z)
                 .thenComparingDouble(e -> e.relativePos().x));
 
-        entries = List.copyOf(normalizedBlocks);
-        entities = List.copyOf(normalizedEntities);
-        sizeX = maxX - minX + 1;
-        sizeY = maxY - minY + 1;
-        sizeZ = maxZ - minZ + 1;
+        return new Normalized(List.copyOf(blocks), List.copyOf(normalizedEntities));
     }
 
-    private static int floor(double value) {
-        return (int) Math.floor(value);
+    private static Bounds inferBounds(List<ConstructionEntry> sourceEntries, List<ConstructionEntityEntry> sourceEntities) {
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+        boolean any = false;
+
+        if (sourceEntries != null) {
+            for (ConstructionEntry entry : sourceEntries) {
+                if (entry == null || entry.relativePos() == null) continue;
+                BlockPos p = entry.relativePos();
+                minX = Math.min(minX, p.getX()); minY = Math.min(minY, p.getY()); minZ = Math.min(minZ, p.getZ());
+                maxX = Math.max(maxX, p.getX()); maxY = Math.max(maxY, p.getY()); maxZ = Math.max(maxZ, p.getZ());
+                any = true;
+            }
+        }
+        if (sourceEntities != null) {
+            for (ConstructionEntityEntry entry : sourceEntities) {
+                if (entry == null || entry.relativePos() == null) continue;
+                Vec3 p = entry.relativePos();
+                int x = (int) Math.floor(p.x), y = (int) Math.floor(p.y), z = (int) Math.floor(p.z);
+                minX = Math.min(minX, x); minY = Math.min(minY, y); minZ = Math.min(minZ, z);
+                maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); maxZ = Math.max(maxZ, z);
+                any = true;
+            }
+        }
+        if (!any) return null;
+        return new Bounds(new BlockPos(minX, minY, minZ), maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1);
     }
+
+    private record Bounds(BlockPos min, int sizeX, int sizeY, int sizeZ) {}
+    private record Normalized(List<ConstructionEntry> blocks, List<ConstructionEntityEntry> entities) {}
 
     public List<ConstructionEntry> entries() { return entries; }
     public List<ConstructionEntityEntry> entities() { return entities; }
@@ -131,7 +148,7 @@ public final class ConstructionPlan {
     public long volume() { return (long) sizeX * sizeY * sizeZ; }
     public boolean hasEntities() { return !entities.isEmpty(); }
 
-    /** Block material checklist after substitutions, matching actual consumption. Entity requirements are resolved server-side. */
+    /** Block material checklist after substitutions; entity requirements are added server-side. */
     public Map<Item, Integer> materialChecklist(BlockSubstitutionRules substitutions) {
         Map<Item, Integer> result = new LinkedHashMap<>();
         BlockSubstitutionRules rules = substitutions == null ? new BlockSubstitutionRules() : substitutions;

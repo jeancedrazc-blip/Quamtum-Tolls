@@ -3,92 +3,110 @@ package mcjty.rftoolsbuilder.constructor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.piston.PistonHeadBlock;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.BedPart;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
 import net.neoforged.neoforge.transfer.transaction.Transaction;
 
-/**
- * Material bridge for the Constructor. It intentionally uses NeoForge's
- * transactional item capability so chests, drawers and modded inventories can
- * all feed the machine without hard dependencies.
- */
+import java.util.ArrayList;
+import java.util.List;
+
+/** Transactional material bridge across all six adjacent item capabilities. */
 final class ConstructorMaterialAccess {
+    record Result(boolean success, ItemStack placementStack, ItemStack missingStack) {
+        static Result ok(ItemStack placement) { return new Result(true, placement == null ? ItemStack.EMPTY : placement.copy(), ItemStack.EMPTY); }
+        static Result missing(ItemStack stack) { return new Result(false, ItemStack.EMPTY, stack == null ? ItemStack.EMPTY : stack.copy()); }
+    }
+
     private ConstructorMaterialAccess() {}
 
-    static boolean isRepresentable(BlockState state) {
-        if (state == null || state.isAir()) return true;
-        if (!requiresMaterial(state)) return true;
-        return state.getBlock().asItem() != Items.AIR;
+    static Result simulate(ServerLevel level, BlockPos machinePos, ConstructorRequirement requirement) {
+        return execute(level, machinePos, requirement, false);
     }
 
-    /**
-     * Parts that share one placement item (upper doors/tall plants, bed heads,
-     * piston heads) must still be constructed, but must not consume a second item.
-     */
-    static boolean requiresMaterial(BlockState state) {
-        if (state == null || state.isAir()) return false;
-        if (state.getBlock() == Blocks.STRUCTURE_VOID) return false;
-        if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
-                && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) return false;
-        if (state.hasProperty(BlockStateProperties.BED_PART)
-                && state.getValue(BlockStateProperties.BED_PART) == BedPart.HEAD) return false;
-        if (state.getBlock() instanceof PistonHeadBlock) return false;
-        return true;
+    static Result consume(ServerLevel level, BlockPos machinePos, ConstructorRequirement requirement) {
+        return execute(level, machinePos, requirement, true);
     }
 
-    static Item materialItem(BlockState state) {
-        return state == null ? Items.AIR : state.getBlock().asItem();
-    }
+    private static Result execute(ServerLevel level, BlockPos machinePos, ConstructorRequirement requirement, boolean commit) {
+        if (requirement == null || requirement.isInvalid()) return Result.missing(ItemStack.EMPTY);
+        if (requirement.isEmpty()) return Result.ok(ItemStack.EMPTY);
 
-    static boolean hasOne(ServerLevel level, BlockPos machinePos, BlockState state) {
-        if (!requiresMaterial(state)) return true;
-        Item item = materialItem(state);
-        if (item == Items.AIR) return false;
-        ItemResource resource = ItemResource.of(item);
+        List<ResourceHandler<ItemResource>> handlers = adjacentHandlers(level, machinePos);
+        if (handlers.isEmpty()) return Result.missing(requirement.requirements().get(0).stack());
 
-        for (Direction direction : Direction.values()) {
-            ResourceHandler<ItemResource> handler = level.getCapability(
-                    Capabilities.Item.BLOCK,
-                    machinePos.relative(direction),
-                    direction.getOpposite()
-            );
-            if (handler == null) continue;
-            try (Transaction transaction = Transaction.openRoot()) {
-                if (handler.extract(resource, 1, transaction) == 1) return true;
-            }
-        }
-        return false;
-    }
-
-    static boolean extractOne(ServerLevel level, BlockPos machinePos, BlockState state) {
-        if (!requiresMaterial(state)) return true;
-        Item item = materialItem(state);
-        if (item == Items.AIR) return false;
-        ItemResource resource = ItemResource.of(item);
-
-        for (Direction direction : Direction.values()) {
-            ResourceHandler<ItemResource> handler = level.getCapability(
-                    Capabilities.Item.BLOCK,
-                    machinePos.relative(direction),
-                    direction.getOpposite()
-            );
-            if (handler == null) continue;
-            try (Transaction transaction = Transaction.openRoot()) {
-                if (handler.extract(resource, 1, transaction) == 1) {
-                    transaction.commit();
-                    return true;
+        try (Transaction transaction = Transaction.openRoot()) {
+            ItemStack placement = ItemStack.EMPTY;
+            for (ConstructorRequirement.StackRequirement required : requirement.requirements()) {
+                if (required.stack().isEmpty()) continue;
+                if (required.use() == ConstructorRequirement.Use.CONSUME) {
+                    int remaining = required.stack().getCount();
+                    for (ResourceHandler<ItemResource> handler : handlers) {
+                        for (int slot = 0; slot < handler.size() && remaining > 0; slot++) {
+                            ItemResource resource = handler.getResource(slot);
+                            if (resource == null || resource.isEmpty()) continue;
+                            ItemStack candidate = resource.toStack();
+                            if (!required.matches(candidate)) continue;
+                            int available = handler.getAmountAsInt(slot);
+                            if (available <= 0) continue;
+                            int wanted = Math.min(remaining, available);
+                            int extracted = handler.extract(slot, resource, wanted, transaction);
+                            if (extracted <= 0) continue;
+                            if (placement.isEmpty()) placement = resource.toStack(1);
+                            remaining -= extracted;
+                        }
+                        if (remaining == 0) break;
+                    }
+                    if (remaining > 0) return Result.missing(required.stack());
+                } else {
+                    boolean damaged = damageOne(handlers, required, transaction);
+                    if (!damaged) return Result.missing(required.stack());
+                    if (placement.isEmpty()) placement = required.stack().copyWithCount(1);
                 }
             }
+            if (commit) transaction.commit();
+            return Result.ok(placement);
+        }
+    }
+
+    private static boolean damageOne(List<ResourceHandler<ItemResource>> handlers,
+                                     ConstructorRequirement.StackRequirement required,
+                                     Transaction transaction) {
+        for (ResourceHandler<ItemResource> handler : handlers) {
+            for (int slot = 0; slot < handler.size(); slot++) {
+                ItemResource resource = handler.getResource(slot);
+                if (resource == null || resource.isEmpty()) continue;
+                ItemStack candidate = resource.toStack();
+                if (!required.matches(candidate) || !candidate.isDamageableItem()) continue;
+                if (handler.extract(slot, resource, 1, transaction) != 1) continue;
+
+                ItemStack damaged = resource.toStack();
+                damaged.setDamageValue(damaged.getDamageValue() + 1);
+                if (damaged.getDamageValue() >= damaged.getMaxDamage()) return true;
+
+                ItemResource damagedResource = ItemResource.of(damaged);
+                if (handler.insert(damagedResource, 1, transaction) == 1) return true;
+                for (ResourceHandler<ItemResource> other : handlers) {
+                    if (other == handler) continue;
+                    if (other.insert(damagedResource, 1, transaction) == 1) return true;
+                }
+                return false;
+            }
         }
         return false;
+    }
+
+    private static List<ResourceHandler<ItemResource>> adjacentHandlers(ServerLevel level, BlockPos machinePos) {
+        ArrayList<ResourceHandler<ItemResource>> result = new ArrayList<>(6);
+        for (Direction direction : Direction.values()) {
+            ResourceHandler<ItemResource> handler = level.getCapability(
+                    Capabilities.Item.BLOCK,
+                    machinePos.relative(direction),
+                    direction.getOpposite()
+            );
+            if (handler != null && !result.contains(handler)) result.add(handler);
+        }
+        return result;
     }
 }

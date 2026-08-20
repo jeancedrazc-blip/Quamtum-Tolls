@@ -35,7 +35,10 @@ public final class ConstructorBootstrap {
     public static final DeferredBlock<ConstructorBlock> CONSTRUCTOR = BLOCKS.registerBlock(
             "constructor",
             ConstructorBlock::new,
-            props -> props.strength(5.0f, 12.0f).sound(SoundType.METAL).noOcclusion()
+            props -> props.strength(5.0f, 12.0f)
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
+                    .lightLevel(state -> state.getValue(ConstructorBlock.LIT) ? 12 : 0)
     );
 
     public static final DeferredBlock<Block> CONSTRUCTOR_TURRET_VISUAL = BLOCKS.registerBlock(
@@ -51,7 +54,12 @@ public final class ConstructorBootstrap {
     public static final DeferredBlock<Block> CONSTRUCTOR_ENERGY_VISUAL = BLOCKS.registerBlock(
             "constructor_energy_visual",
             Block::new,
-            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f)
+    );
+    public static final DeferredBlock<Block> CONSTRUCTOR_BASE_ENERGY_VISUAL = BLOCKS.registerBlock(
+            "constructor_base_energy_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f)
     );
 
     public static final DeferredBlock<SchematicTableBlock> SCHEMATIC_TABLE = BLOCKS.registerBlock(

@@ -55,6 +55,7 @@ jobs:
         run: |
           set -u
           mkdir -p ci
+          rm -rf ci/editor-classes
           set +e
           gradle build --stacktrace > ci/build.log 2>&1
           code=$?
@@ -70,18 +71,34 @@ jobs:
               base64 -w 4096 "$jar_path" > ci/quantum-tools-dev9.jar.base64
               wc -l < ci/quantum-tools-dev9.jar.base64 > ci/artifact.lines
               sha256sum "$jar_path" > ci/artifact.sha256
+
+              # Export every compiled class belonging to the new placement editor.
+              # This lets the final test JAR patch the complete approved V5 binary
+              # instead of replacing the whole mod with the Constructor-only source build.
+              mkdir -p ci/editor-classes
+              unzip -Z1 "$jar_path" \
+                | grep -E '^mcjty/rftoolsbuilder/constructor/client/(ConstructorClient|SchematicPlacementHandler|SchematicPlacementScreen)(\$.*)?\.class$' \
+                > ci/editor-class-list.txt
+              while IFS= read -r class_path; do
+                [ -n "$class_path" ] || continue
+                safe_name="$(printf '%s' "$class_path" | sed 's#/#__#g')"
+                unzip -p "$jar_path" "$class_path" | base64 -w 4096 > "ci/editor-classes/${safe_name}.base64"
+              done < ci/editor-class-list.txt
             fi
           else
             echo "FAILED ($code)" > ci/status.txt
-            rm -f ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines
+            rm -f ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines ci/editor-class-list.txt
+            rm -rf ci/editor-classes
           fi
 
           git config user.name "Quantum Tools CI"
           git config user.email "actions@users.noreply.github.com"
           git add -- src/main/resources ci/status.txt ci/build.log
-          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines; fi
+          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then
+            git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines ci/editor-class-list.txt ci/editor-classes
+          fi
           if ! git diff --cached --quiet; then
-            git commit -m "Record wrapped dev9 build artifact"
+            git commit -m "Export verified placement editor classes"
             git push origin HEAD:source/3.0.6-dev.9-placement-editor
           fi
           exit "$code"

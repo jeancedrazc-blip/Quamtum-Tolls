@@ -87,7 +87,6 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
         if (state.hasTarget) {
             if (targetState != null) {
-                // Block projectiles always render the real target BlockState model.
                 blockResolver.update(state.projectile, targetState, DISPLAY_CONTEXT);
             } else if (entityTarget) {
                 ItemStack projectileItem = blockEntity.projectileItem();
@@ -171,13 +170,17 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
     }
 
     private static void submitEnergy(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
+        boolean active = isEnergyActive(state.status);
+        float pulse = active ? state.energyPulse : 1.0f;
+        int light = active ? FULL_BRIGHT : state.lightCoords;
+
         poseStack.pushPose();
         rotateAroundPivot(poseStack, state.displayYaw, state.displayPitch);
         poseStack.translate(0.0, 0.0, -state.recoil);
         poseStack.translate(PIVOT_X, PIVOT_Y, PIVOT_Z);
-        poseStack.scale(state.energyPulse, state.energyPulse, 1.0f);
+        poseStack.scale(pulse, pulse, 1.0f);
         poseStack.translate(-PIVOT_X, -PIVOT_Y, -PIVOT_Z);
-        state.energyChannel.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+        state.energyChannel.submit(poseStack, collector, light, OverlayTexture.NO_OVERLAY, 0);
         poseStack.popPose();
     }
 
@@ -246,6 +249,13 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
             case NORTH -> 180.0f;
             case WEST -> -90.0f;
             default -> 0.0f;
+        };
+    }
+
+    private static boolean isEnergyActive(ConstructorStatus status) {
+        return switch (status) {
+            case READY, AIMING, CHARGING, FIRING, WAITING_ENERGY, WAITING_MATERIAL, WAITING_CHUNK -> true;
+            default -> false;
         };
     }
 

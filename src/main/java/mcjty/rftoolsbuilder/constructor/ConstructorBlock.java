@@ -18,6 +18,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,7 +27,9 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
 
     public ConstructorBlock(BlockBehaviour.Properties properties) {
         super(properties);
-        registerDefaultState(stateDefinition.any().setValue(FACING, Direction.NORTH));
+        registerDefaultState(stateDefinition.any()
+                .setValue(FACING, Direction.NORTH)
+                .setValue(BlockStateProperties.LIT, false));
     }
 
     @Override
@@ -36,12 +39,14 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<net.minecraft.world.level.block.Block, BlockState> builder) {
-        builder.add(FACING);
+        builder.add(FACING, BlockStateProperties.LIT);
     }
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
+        return defaultBlockState()
+                .setValue(FACING, context.getHorizontalDirection().getOpposite())
+                .setValue(BlockStateProperties.LIT, false);
     }
 
     @Override
@@ -55,7 +60,17 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
         if (type != ConstructorBootstrap.CONSTRUCTOR_BLOCK_ENTITY.get()) {
             return null;
         }
-        return (BlockEntityTicker<T>) (BlockEntityTicker<ConstructorBlockEntity>) ConstructorBlockEntity::tick;
+        return (BlockEntityTicker<T>) (BlockEntityTicker<ConstructorBlockEntity>) (tickLevel, tickPos, tickState, constructor) -> {
+            ConstructorBlockEntity.tick(tickLevel, tickPos, tickState, constructor);
+            if (!tickLevel.isClientSide()) {
+                BlockState current = tickLevel.getBlockState(tickPos);
+                boolean lit = constructor.isRunning();
+                if (current.hasProperty(BlockStateProperties.LIT)
+                        && current.getValue(BlockStateProperties.LIT) != lit) {
+                    tickLevel.setBlock(tickPos, current.setValue(BlockStateProperties.LIT, lit), 3);
+                }
+            }
+        };
     }
 
     @Override

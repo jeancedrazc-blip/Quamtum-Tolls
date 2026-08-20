@@ -3,6 +3,7 @@ package mcjty.rftoolsbuilder.constructor;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.decoration.GlowItemFrame;
 import net.minecraft.world.entity.decoration.ItemFrame;
@@ -20,6 +21,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * how they are paid for.
  */
 public final class ConstructorEntityRequirementRegistry {
+    private static final EquipmentSlot[] ARMOR_STAND_SLOTS = {
+            EquipmentSlot.MAINHAND,
+            EquipmentSlot.OFFHAND,
+            EquipmentSlot.FEET,
+            EquipmentSlot.LEGS,
+            EquipmentSlot.CHEST,
+            EquipmentSlot.HEAD
+    };
+
     @FunctionalInterface
     public interface EntityRequirementProvider {
         ConstructorRequirement get(Entity entity);
@@ -61,10 +71,13 @@ public final class ConstructorEntityRequirementRegistry {
 
         if (entity instanceof ArmorStand armorStand) {
             ArrayList<ConstructorRequirement.StackRequirement> requirements = new ArrayList<>();
-            requirements.add(new ConstructorRequirement.StackRequirement(new ItemStack(Items.ARMOR_STAND), ConstructorRequirement.Use.CONSUME, false));
-            for (ItemStack stack : armorStand.getAllSlots()) {
+            requirements.add(new ConstructorRequirement.StackRequirement(
+                    new ItemStack(Items.ARMOR_STAND), ConstructorRequirement.Use.CONSUME, false));
+            for (EquipmentSlot slot : ARMOR_STAND_SLOTS) {
+                ItemStack stack = armorStand.getItemBySlot(slot);
                 if (!stack.isEmpty()) {
-                    requirements.add(new ConstructorRequirement.StackRequirement(stack.copy(), ConstructorRequirement.Use.CONSUME, true));
+                    requirements.add(new ConstructorRequirement.StackRequirement(
+                            stack.copy(), ConstructorRequirement.Use.CONSUME, true));
                 }
             }
             return new ConstructorRequirement(requirements);

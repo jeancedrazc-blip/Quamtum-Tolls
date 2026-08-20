@@ -1,0 +1,74 @@
+QUANTUM TOOLS — SOURCE OF TRUTH POLICY
+Data: 2026-08-20
+Status: OBRIGATÓRIO
+
+REGRA ABSOLUTA
+
+QUALQUER ALTERAÇÃO NO QUANTUM TOOLS DEVE SER FEITA NO CÓDIGO-FONTE.
+
+Isso inclui, sem exceção:
+- código Java;
+- lógica de gameplay;
+- networking;
+- UI/UX;
+- renderers;
+- modelos 3D;
+- blockstates;
+- texturas;
+- traduções;
+- receitas;
+- tags;
+- configs;
+- metadata;
+- integrações;
+- compatibilidade com outros mods;
+- schematic loaders e transforms;
+- qualquer outro asset ou comportamento do mod.
+
+FLUXO OBRIGATÓRIO
+
+1. Alterar src/main/java, src/main/resources ou outro arquivo-fonte versionado apropriado.
+2. Registrar a alteração no GitHub.
+3. Compilar o projeto a partir desse código-fonte.
+4. Gerar o JAR exclusivamente como produto da compilação.
+5. Testar o JAR em jogo quando a alteração exigir validação funcional/visual.
+6. Corrigir eventuais problemas novamente no código-fonte.
+7. Recompilar.
+8. Só após aprovação promover o estado aprovado para main.
+
+PROIBIDO
+
+- Editar diretamente um JAR para criar uma nova versão.
+- Injetar .class manualmente em um JAR como método normal de desenvolvimento.
+- Substituir JSON, textura, modelo ou outro asset diretamente dentro do JAR para criar a versão oficial.
+- Manter uma correção apenas no binário sem equivalente no código-fonte.
+- Usar um JAR anterior como base de desenvolvimento para a próxima alteração.
+- Entregar uma alteração que não possa ser reproduzida por uma compilação limpa do repositório.
+- Considerar o JAR como fonte de verdade.
+
+USO PERMITIDO DO JAR
+
+O JAR pode ser usado somente para:
+- execução no Minecraft;
+- teste;
+- comparação com uma versão anterior;
+- auditoria;
+- recuperação excepcional de comportamento legado durante reconstrução de source;
+- validação de equivalência.
+
+Mesmo nesses casos, qualquer correção resultante deve ser aplicada no source antes de virar uma nova versão.
+
+CRITÉRIO DE VALIDADE DO SOURCE
+
+O código-fonte só pode ser considerado canônico quando uma compilação limpa do repositório gera sozinha o mod completo correspondente ao estado aprovado, sem depender de patch manual sobre JAR anterior.
+
+Se isso não for verdade, a reconstrução/consolidação do source ainda não está concluída.
+
+REGRA PARA ALTERAÇÕES FUTURAS
+
+SOURCE -> BUILD -> JAR -> TESTE -> CORREÇÃO NO SOURCE -> BUILD -> APROVAÇÃO -> MAIN
+
+Nunca:
+JAR -> PATCH DIRETO -> NOVO JAR
+
+Esta política prevalece sobre qualquer procedimento anterior que permita patch binário como método de desenvolvimento.

@@ -85,6 +85,10 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         gui.fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1, PANEL);
     }
 
+    private void centered(GuiGraphicsExtractor gui, Component component, int centerX, int y, int color) {
+        gui.text(font, component, centerX - font.width(component) / 2, y, color, false);
+    }
+
     @Override
     public void extractBackground(GuiGraphicsExtractor gui, int mouseX, int mouseY, float partialTick) {
         int x = leftPos;
@@ -92,7 +96,7 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
 
         gui.fill(x, y, x + imageWidth, y + imageHeight, BG);
         gui.fill(x + 2, y + 2, x + imageWidth - 2, y + imageHeight - 2, PANEL_2);
-        gui.centeredText(font, Component.literal("CONSTRUCTOR CONTROL"), x + imageWidth / 2, y + 8, CYAN);
+        centered(gui, Component.literal("CONSTRUCTOR CONTROL"), x + imageWidth / 2, y + 8, CYAN);
         gui.fill(x + 8, y + 22, x + imageWidth - 8, y + 23, BORDER);
 
         panel(gui, x + 10, y + 30, x + 86, y + 138);

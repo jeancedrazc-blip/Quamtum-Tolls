@@ -1,0 +1,1 @@
+Binary reference is stored in the same folder as `constructor-ct01-approved-reference.webp` once the binary tree commit is created. This note exists only so the reference folder remains discoverable in text-only tooling.

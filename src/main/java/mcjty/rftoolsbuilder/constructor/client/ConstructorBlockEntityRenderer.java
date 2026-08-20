@@ -5,6 +5,7 @@ import com.mojang.math.Axis;
 import mcjty.rftoolsbuilder.constructor.ConstructorBlockEntity;
 import mcjty.rftoolsbuilder.constructor.ConstructorBootstrap;
 import mcjty.rftoolsbuilder.constructor.ConstructorStatus;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.BlockModelResolver;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
@@ -15,6 +16,8 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
@@ -57,11 +60,36 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         BlockPos origin = blockEntity.getBlockPos();
         BlockPos target = blockEntity.targetPos();
         BlockState targetState = blockEntity.targetState();
+        boolean entityTarget = blockEntity.targetIsEntity();
+        ItemStack projectileItem = blockEntity.projectileItem();
+
         state.status = blockEntity.status();
-        state.hasTarget = target != null && targetState != null;
+        state.hasTarget = target != null && (targetState != null || entityTarget);
         state.projectileVisible = false;
         state.projectileProgress = 0.0f;
+        state.projectileIsItem = entityTarget;
         state.recoil = 0.0f;
+
+        if (state.hasTarget) {
+            if (entityTarget) {
+                if (!projectileItem.isEmpty()) {
+                    Minecraft.getInstance().getItemModelResolver().updateForTopItem(
+                            state.itemProjectile,
+                            projectileItem,
+                            ItemDisplayContext.GROUND,
+                            null,
+                            null,
+                            0
+                    );
+                } else {
+                    state.itemProjectile.clear();
+                }
+            } else if (targetState != null) {
+                blockResolver.update(state.blockProjectile, targetState, DISPLAY_CONTEXT);
+            }
+        } else {
+            state.itemProjectile.clear();
+        }
 
         Direction facing = blockEntity.getBlockState().getValue(BlockStateProperties.HORIZONTAL_FACING);
         float desiredYaw = homeYaw(facing);
@@ -78,8 +106,6 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         }
 
         if (state.hasTarget) {
-            blockResolver.update(state.projectile, targetState, DISPLAY_CONTEXT);
-
             state.targetX = target.getX() - origin.getX() + 0.5;
             state.targetY = target.getY() - origin.getY() + 0.5;
             state.targetZ = target.getZ() - origin.getZ() + 0.5;
@@ -117,7 +143,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         }
 
         if (state.status == ConstructorStatus.FIRING && state.hasTarget) {
-            state.projectileVisible = true;
+            state.projectileVisible = !state.projectileIsItem || !state.itemProjectile.isEmpty();
             state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick) / (float) blockEntity.flightTicks());
             state.recoil = 0.145f * (1.0f - smoothStep(state.projectileProgress));
         }
@@ -184,8 +210,13 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         poseStack.mulPose(Axis.YP.rotationDegrees(360.0f * p));
         poseStack.mulPose(Axis.XP.rotationDegrees(90.0f * p));
         poseStack.scale(scale, scale, scale);
-        poseStack.translate(-0.5, -0.5, -0.5);
-        state.projectile.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+
+        if (state.projectileIsItem) {
+            state.itemProjectile.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+        } else {
+            poseStack.translate(-0.5, -0.5, -0.5);
+            state.blockProjectile.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+        }
         poseStack.popPose();
     }
 

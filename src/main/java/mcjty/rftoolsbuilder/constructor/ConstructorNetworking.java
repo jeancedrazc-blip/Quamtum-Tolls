@@ -52,7 +52,7 @@ public final class ConstructorNetworking {
         ServerPlayer player = serverPlayer(context);
         if (player == null) return;
         int slot = payload.slot();
-        if (slot < 0 || slot >= 9 || slot != player.getInventory().selected) return;
+        if (slot < 0 || slot >= 9 || slot != player.getInventory().getSelectedSlot()) return;
         ItemStack stack = player.getInventory().getItem(slot);
         if (!(stack.getItem() instanceof SchematicCardItem) || !SchematicCardItem.hasSource(stack) || !SchematicCardItem.hasBounds(stack)) return;
         String expectedHash = SchematicCardItem.sha256(stack);

@@ -5,7 +5,6 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
 @EventBusSubscriber(modid = ConstructorBootstrap.MOD_ID, value = Dist.CLIENT)
@@ -22,10 +21,5 @@ public final class ConstructorClient {
         event.register(ConstructorBootstrap.CONSTRUCTOR_MENU.get(), ConstructorScreen::new);
         event.register(ConstructorBootstrap.SCHEMATIC_TABLE_MENU.get(), SchematicTableScreen::new);
         SchematicPlacementHandler.install();
-    }
-
-    @SubscribeEvent
-    public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
-        SchematicPlacementHandler.registerKeys(event);
     }
 }

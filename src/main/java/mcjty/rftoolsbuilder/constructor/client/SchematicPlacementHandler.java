@@ -1,6 +1,5 @@
 package mcjty.rftoolsbuilder.constructor.client;
 
-import com.mojang.blaze3d.platform.InputConstants;
 import mcjty.rftoolsbuilder.constructor.ConstructorNetworking;
 import mcjty.rftoolsbuilder.constructor.ConstructorStateFilterRegistry;
 import mcjty.rftoolsbuilder.constructor.SchematicCardItem;
@@ -9,7 +8,6 @@ import mcjty.rftoolsbuilder.constructor.SchematicTransform;
 import mcjty.rftoolsbuilder.constructor.UniversalSchematicLoader;
 import mcjty.rftoolsbuilder.constructor.plan.BlockSubstitutionRules;
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
@@ -23,7 +21,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
@@ -33,119 +30,246 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/** Client-side equivalent of Create's schematic deployment handler. */
+/**
+ * Mouse/UI-driven schematic deployment controller.
+ *
+ * There are deliberately no key mappings here. Right-clicking a written
+ * Schematic Card opens {@link SchematicPlacementScreen}; after that the anchor,
+ * rotation and mirror are changed only by explicit UI actions. The player's
+ * crosshair is sampled only when the editor is opened or when the user presses
+ * the target button.
+ */
 public final class SchematicPlacementHandler {
-    public static final KeyMapping DEPLOY = new KeyMapping("key.rftoolsbuilder.schematic_deploy", InputConstants.KEY_G, KeyMapping.Category.MISC);
-    public static final KeyMapping ROTATE = new KeyMapping("key.rftoolsbuilder.schematic_rotate", InputConstants.KEY_R, KeyMapping.Category.MISC);
-    public static final KeyMapping MIRROR = new KeyMapping("key.rftoolsbuilder.schematic_mirror", InputConstants.KEY_M, KeyMapping.Category.MISC);
-
     private static final BlockDisplayContext DISPLAY_CONTEXT = BlockDisplayContext.create();
     private static final Map<BlockState, BlockModelRenderState> MODEL_CACHE = new HashMap<>();
+
     private static boolean installed;
     private static String loadedKey = "";
     private static int loadGeneration;
     private static ConstructionPlan plan;
     private static BlockSubstitutionRules substitutions = new BlockSubstitutionRules();
+    private static int lastCardComponentsHash;
+
     private static boolean editing;
     private static BlockPos editAnchor = BlockPos.ZERO;
     private static int editRotation;
     private static int editMirror;
-    private static int verticalOffset;
-    private static int lastCardComponentsHash;
+    private static BlockPos resetAnchor = BlockPos.ZERO;
+    private static int resetRotation;
+    private static int resetMirror;
 
     private SchematicPlacementHandler() {}
-
-    public static void registerKeys(RegisterKeyMappingsEvent event) {
-        event.register(DEPLOY);
-        event.register(ROTATE);
-        event.register(MIRROR);
-    }
 
     public static void install() {
         if (installed) return;
         installed = true;
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onClientTick);
-        NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onScroll);
+        NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onMouseButton);
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onSubmitGeometry);
     }
 
     private static void onClientTick(ClientTickEvent.Post event) {
         ClientSchematicUploader.tick();
+
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.level == null || mc.screen != null) return;
-        ItemStack card = mc.player.getMainHandItem();
-        if (!(card.getItem() instanceof SchematicCardItem) || !SchematicCardItem.hasSource(card)) {
+        if (mc.player == null || mc.level == null) {
+            clearTransient();
+            return;
+        }
+
+        ItemStack card = currentCard(mc);
+        if (!isWrittenCard(card)) {
+            if (editing) editing = false;
             clearTransient();
             return;
         }
 
         ensurePlan(card);
-        if (!SchematicCardItem.deployed(card) && !editing) beginEditing(card);
-
-        if (editing) {
-            updateLookAnchor(mc);
-            if (ROTATE.consumeClick()) {
-                editRotation = Math.floorMod(editRotation + 1, 4);
-                MODEL_CACHE.clear();
-                message("Schematic rotation: " + (editRotation * 90) + "°");
-            }
-            if (MIRROR.consumeClick()) {
-                editMirror = (editMirror + 1) % 3;
-                MODEL_CACHE.clear();
-                message("Schematic mirror: " + mirrorName(editMirror));
-            }
-            if (DEPLOY.consumeClick()) {
-                if (mc.player.isShiftKeyDown()) {
-                    syncDeployment(card, false);
-                    editing = true;
-                    message("Schematic deployment cleared");
-                } else {
-                    syncDeployment(card, true);
-                    editing = false;
-                    message("Schematic position confirmed");
-                }
-            }
-        } else if (DEPLOY.consumeClick()) {
-            beginEditing(card);
-            message("Schematic edit mode — look to move, Shift+scroll changes height");
-        }
     }
 
-    private static void onScroll(InputEvent.MouseScrollingEvent event) {
+    private static void onMouseButton(InputEvent.MouseButton.Pre event) {
+        if (event.getButton() != 1 || event.getAction() != 1) return;
+
         Minecraft mc = Minecraft.getInstance();
-        if (!editing || mc.player == null || mc.screen != null || !mc.player.isShiftKeyDown()) return;
-        ItemStack card = mc.player.getMainHandItem();
-        if (!(card.getItem() instanceof SchematicCardItem) || !SchematicCardItem.hasSource(card)) return;
-        int delta = event.getAccumulatedScrollY();
-        if (delta == 0) delta = (int) Math.signum(event.getScrollDeltaY());
-        if (delta == 0) return;
-        verticalOffset += Integer.signum(delta);
+        if (mc.player == null || mc.level == null || mc.screen != null) return;
+
+        ItemStack card = currentCard(mc);
+        if (!isWrittenCard(card)) return;
+
         event.setCanceled(true);
-        updateLookAnchor(mc);
-        message("Schematic height offset: " + verticalOffset);
+        ensurePlan(card);
+        beginEditing(card, mc);
+        mc.setScreen(new SchematicPlacementScreen());
     }
 
-    private static void beginEditing(ItemStack card) {
-        editing = true;
+    private static void beginEditing(ItemStack card, Minecraft mc) {
         editRotation = SchematicCardItem.rotation(card);
         editMirror = SchematicCardItem.mirror(card);
-        editAnchor = SchematicCardItem.deployed(card) ? SchematicCardItem.anchor(card) : BlockPos.ZERO;
-        verticalOffset = 0;
+
+        if (SchematicCardItem.deployed(card)) {
+            editAnchor = SchematicCardItem.anchor(card);
+        } else {
+            BlockPos target = lookAnchor(mc);
+            editAnchor = target != null ? target : centeredInFront(mc, 4);
+        }
+
+        resetAnchor = editAnchor;
+        resetRotation = editRotation;
+        resetMirror = editMirror;
+        editing = true;
         MODEL_CACHE.clear();
     }
 
-    private static void updateLookAnchor(Minecraft mc) {
-        if (!(mc.hitResult instanceof BlockHitResult hit)) return;
-        BlockPos base = hit.getBlockPos().relative(hit.getDirection());
-        editAnchor = new BlockPos(base.getX(), base.getY() + verticalOffset, base.getZ());
+    public static boolean isEditing() { return editing; }
+
+    public static boolean hasValidCard() {
+        return isWrittenCard(currentCard(Minecraft.getInstance()));
+    }
+
+    public static boolean hasSavedDeployment() {
+        ItemStack card = currentCard(Minecraft.getInstance());
+        return isWrittenCard(card) && SchematicCardItem.deployed(card);
+    }
+
+    public static BlockPos anchor() { return editAnchor; }
+    public static int rotationQuarter() { return editRotation; }
+    public static int rotationDegrees() { return Math.floorMod(editRotation, 4) * 90; }
+    public static int mirror() { return editMirror; }
+    public static String mirrorName() { return mirrorName(editMirror); }
+
+    public static int sizeX() {
+        if (plan != null) return plan.sizeX();
+        ItemStack card = currentCard(Minecraft.getInstance());
+        return isWrittenCard(card) ? SchematicCardItem.sizeX(card) : 0;
+    }
+
+    public static int sizeY() {
+        if (plan != null) return plan.sizeY();
+        ItemStack card = currentCard(Minecraft.getInstance());
+        return isWrittenCard(card) ? SchematicCardItem.sizeY(card) : 0;
+    }
+
+    public static int sizeZ() {
+        if (plan != null) return plan.sizeZ();
+        ItemStack card = currentCard(Minecraft.getInstance());
+        return isWrittenCard(card) ? SchematicCardItem.sizeZ(card) : 0;
+    }
+
+    public static boolean previewReady() {
+        return plan != null && plan.totalTargets() > 0;
+    }
+
+    public static int previewBlockCount() {
+        return plan == null ? 0 : plan.blockCount();
+    }
+
+    public static void nudge(int dx, int dy, int dz) {
+        if (!editing) return;
+        editAnchor = editAnchor.offset(dx, dy, dz);
+    }
+
+    public static void setRotation(int quarterTurns) {
+        if (!editing) return;
+        editRotation = Math.floorMod(quarterTurns, 4);
+        MODEL_CACHE.clear();
+    }
+
+    public static void setMirror(int mirror) {
+        if (!editing) return;
+        editMirror = Math.max(0, Math.min(2, mirror));
+        MODEL_CACHE.clear();
+    }
+
+    public static void placeAtLook() {
+        if (!editing) return;
+        Minecraft mc = Minecraft.getInstance();
+        BlockPos target = lookAnchor(mc);
+        if (target != null) editAnchor = target;
+    }
+
+    public static void placeInFront() {
+        if (!editing) return;
+        editAnchor = centeredInFront(Minecraft.getInstance(), 4);
+    }
+
+    public static void centerOnPlayer() {
+        if (!editing) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        int sx = transformedSizeX();
+        int sz = transformedSizeZ();
+        BlockPos base = mc.player.blockPosition();
+        editAnchor = base.offset(-sx / 2, 0, -sz / 2);
+    }
+
+    public static void reset() {
+        if (!editing) return;
+        editAnchor = resetAnchor;
+        editRotation = resetRotation;
+        editMirror = resetMirror;
+        MODEL_CACHE.clear();
+    }
+
+    public static boolean confirm() {
+        if (!editing) return false;
+        if (!previewReady()) {
+            message("Schematic preview is still loading");
+            return false;
+        }
+
+        ItemStack card = currentCard(Minecraft.getInstance());
+        if (!isWrittenCard(card)) return false;
+
+        syncDeployment(card, true);
+        editing = false;
+        MODEL_CACHE.clear();
+        return true;
+    }
+
+    public static boolean clearDeployment() {
+        ItemStack card = currentCard(Minecraft.getInstance());
+        if (!isWrittenCard(card)) return false;
+
+        syncDeployment(card, false);
+        editing = false;
+        MODEL_CACHE.clear();
+        return true;
+    }
+
+    public static void cancel() {
+        editing = false;
+        MODEL_CACHE.clear();
+    }
+
+    private static int transformedSizeX() {
+        return (Math.floorMod(editRotation, 4) & 1) == 0 ? Math.max(1, sizeX()) : Math.max(1, sizeZ());
+    }
+
+    private static int transformedSizeZ() {
+        return (Math.floorMod(editRotation, 4) & 1) == 0 ? Math.max(1, sizeZ()) : Math.max(1, sizeX());
+    }
+
+    private static BlockPos centeredInFront(Minecraft mc, int distance) {
+        if (mc.player == null) return BlockPos.ZERO;
+        int sx = transformedSizeX();
+        int sz = transformedSizeZ();
+        BlockPos center = mc.player.blockPosition().relative(mc.player.getDirection(), distance);
+        return center.offset(-sx / 2, 0, -sz / 2);
+    }
+
+    private static BlockPos lookAnchor(Minecraft mc) {
+        if (!(mc.hitResult instanceof BlockHitResult hit)) return null;
+        return hit.getBlockPos().relative(hit.getDirection());
     }
 
     private static void syncDeployment(ItemStack card, boolean deployed) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
+
         BlockPos anchor = deployed ? editAnchor : BlockPos.ZERO;
         int rotation = deployed ? editRotation : 0;
         int mirror = deployed ? editMirror : 0;
+
         SchematicCardItem.setDeployment(card, anchor, rotation, mirror, deployed);
         ClientPacketDistributor.sendToServer(new ConstructorNetworking.SyncDeployment(
                 mc.player.getInventory().getSelectedSlot(), anchor, rotation, mirror, deployed, SchematicCardItem.sha256(card)));
@@ -155,6 +279,7 @@ public final class SchematicPlacementHandler {
         int componentHash = card.getComponentsPatch().hashCode();
         String key = SchematicCardItem.clientFile(card) + "|" + SchematicCardItem.sourceType(card) + "|" + SchematicCardItem.sha256(card);
         if (key.equals(loadedKey) && componentHash == lastCardComponentsHash) return;
+
         loadedKey = key;
         lastCardComponentsHash = componentHash;
         plan = null;
@@ -169,10 +294,14 @@ public final class SchematicPlacementHandler {
             message("Unsupported schematic format on card");
             return;
         }
+
         SchematicFolderIndex.Entry entry = new SchematicFolderIndex.Entry(SchematicCardItem.clientFile(card), format);
         CompletableFuture.supplyAsync(() -> {
-            try { return UniversalSchematicLoader.load(entry, false); }
-            catch (IOException exception) { throw new RuntimeException(exception); }
+            try {
+                return UniversalSchematicLoader.load(entry, false);
+            } catch (IOException exception) {
+                throw new RuntimeException(exception);
+            }
         }).whenComplete((loaded, error) -> Minecraft.getInstance().execute(() -> {
             if (generation != loadGeneration) return;
             if (error != null || loaded == null || loaded.totalTargets() == 0) {
@@ -187,12 +316,14 @@ public final class SchematicPlacementHandler {
     private static void onSubmitGeometry(SubmitCustomGeometryEvent event) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || plan == null) return;
-        ItemStack card = mc.player.getMainHandItem();
-        if (!(card.getItem() instanceof SchematicCardItem) || !SchematicCardItem.hasSource(card)) return;
+
+        ItemStack card = currentCard(mc);
+        if (!isWrittenCard(card)) return;
 
         SchematicTransform transform = editing
                 ? new SchematicTransform(editAnchor, editRotation, editMirror, plan.sizeX(), plan.sizeY(), plan.sizeZ())
                 : SchematicCardItem.transform(card);
+
         if (!editing && !SchematicCardItem.deployed(card)) return;
 
         var pose = event.getPoseStack();
@@ -203,6 +334,7 @@ public final class SchematicPlacementHandler {
             BlockState source = substitutions.apply(entry.sourceState());
             BlockState state = ConstructorStateFilterRegistry.sanitize(transform.transformState(source));
             if (state.isAir() || state.getBlock() == Blocks.STRUCTURE_VOID) continue;
+
             BlockPos worldPos = transform.transformWorld(entry.relativePos());
             BlockModelRenderState renderState = MODEL_CACHE.computeIfAbsent(state, s -> {
                 BlockModelRenderState created = new BlockModelRenderState();
@@ -219,18 +351,26 @@ public final class SchematicPlacementHandler {
         }
     }
 
+    private static ItemStack currentCard(Minecraft mc) {
+        if (mc == null || mc.player == null) return ItemStack.EMPTY;
+        return mc.player.getMainHandItem();
+    }
+
+    private static boolean isWrittenCard(ItemStack stack) {
+        return stack != null && stack.getItem() instanceof SchematicCardItem && SchematicCardItem.hasSource(stack);
+    }
+
     private static void clearTransient() {
-        if (!loadedKey.isEmpty()) {
+        if (!loadedKey.isEmpty() || plan != null) {
             loadedKey = "";
             plan = null;
             MODEL_CACHE.clear();
             editing = false;
-            verticalOffset = 0;
             ++loadGeneration;
         }
     }
 
-    private static String mirrorName(int mirror) {
+    public static String mirrorName(int mirror) {
         return switch (mirror) {
             case 1 -> "Left/Right";
             case 2 -> "Front/Back";

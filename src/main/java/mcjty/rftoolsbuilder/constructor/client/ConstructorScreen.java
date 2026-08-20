@@ -1,6 +1,5 @@
 package mcjty.rftoolsbuilder.constructor.client;
 
-import mcjty.rftoolsbuilder.constructor.ConstructorBlockEntity;
 import mcjty.rftoolsbuilder.constructor.ConstructorMenu;
 import mcjty.rftoolsbuilder.constructor.ConstructorReplaceMode;
 import mcjty.rftoolsbuilder.constructor.ConstructorStatus;
@@ -16,6 +15,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
+/** Functional development UI. Final visual language is intentionally deferred to the approved UI-reference round. */
 public final class ConstructorScreen extends AbstractContainerScreen<ConstructorMenu> {
     private static final int BG = 0xFF071018;
     private static final int PANEL = 0xFF0D1B26;
@@ -45,29 +45,21 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         super.init();
         int x = leftPos;
         int y = topPos;
-
-        startButton = addRenderableWidget(Button.builder(Component.literal("START"), b -> sendButton(2))
-                .bounds(x + 12, y + 146, 76, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("PAUSE / RESUME"), b -> sendButton(0))
-                .bounds(x + 98, y + 146, 86, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("CLEAR"), b -> sendButton(1))
-                .bounds(x + 194, y + 146, 66, 20).build());
-
-        modeButton = addRenderableWidget(Button.builder(Component.empty(), b -> sendButton(3))
-                .bounds(x + 12, y + 172, 88, 20).build());
-        skipMissingButton = addRenderableWidget(Button.builder(Component.empty(), b -> sendButton(4))
-                .bounds(x + 104, y + 172, 78, 20).build());
-        blockEntityButton = addRenderableWidget(Button.builder(Component.empty(), b -> sendButton(5))
-                .bounds(x + 186, y + 172, 74, 20).build());
+        startButton = addRenderableWidget(Button.builder(Component.literal("START"), b -> sendButton(2)).bounds(x + 12, y + 146, 76, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("PAUSE / RESUME"), b -> sendButton(0)).bounds(x + 98, y + 146, 86, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("CLEAR"), b -> sendButton(1)).bounds(x + 194, y + 146, 66, 20).build());
+        modeButton = addRenderableWidget(Button.builder(Component.empty(), b -> sendButton(3)).bounds(x + 12, y + 172, 88, 20).build());
+        skipMissingButton = addRenderableWidget(Button.builder(Component.empty(), b -> sendButton(4)).bounds(x + 104, y + 172, 78, 20).build());
+        blockEntityButton = addRenderableWidget(Button.builder(Component.empty(), b -> sendButton(5)).bounds(x + 186, y + 172, 74, 20).build());
     }
 
     @Override
     protected void containerTick() {
         super.containerTick();
         ConstructorStatus s = status(menu.data().get(2));
-        boolean hasCard = menu.data().get(8) != 0;
+        boolean hasDeployedCard = menu.data().get(8) != 0;
         boolean busy = s == ConstructorStatus.AIMING || s == ConstructorStatus.CHARGING || s == ConstructorStatus.FIRING || menu.data().get(6) != 0;
-        if (startButton != null) startButton.active = hasCard && !busy;
+        if (startButton != null) startButton.active = hasDeployedCard && !busy;
 
         ConstructorReplaceMode mode = replaceMode(menu.data().get(9));
         if (modeButton != null) modeButton.setMessage(Component.literal(modeLabel(mode)));
@@ -93,20 +85,16 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     public void extractBackground(GuiGraphicsExtractor gui, int mouseX, int mouseY, float partialTick) {
         int x = leftPos;
         int y = topPos;
-
         gui.fill(x, y, x + imageWidth, y + imageHeight, BG);
         gui.fill(x + 2, y + 2, x + imageWidth - 2, y + imageHeight - 2, PANEL_2);
         centered(gui, Component.literal("CONSTRUCTOR CONTROL"), x + imageWidth / 2, y + 8, CYAN);
         gui.fill(x + 8, y + 22, x + imageWidth - 8, y + 23, BORDER);
-
         panel(gui, x + 10, y + 30, x + 86, y + 138);
         panel(gui, x + 90, y + 30, x + 190, y + 138);
         panel(gui, x + 194, y + 30, x + 262, y + 138);
-
         drawEnergy(gui, x, y);
         drawJob(gui, x, y);
         drawTarget(gui, x, y);
-
         gui.fill(x + 8, y + 200, x + imageWidth - 8, y + 201, BORDER);
         gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 194, MUTED);
     }
@@ -115,18 +103,13 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         int energy = Math.max(0, menu.data().get(0));
         int capacity = Math.max(1, menu.data().get(1));
         ConstructorStatus status = status(menu.data().get(2));
-
         gui.text(font, Component.literal("ENERGY"), x + 16, y + 36, MUTED);
-        int bx1 = x + 22;
-        int by1 = y + 52;
-        int bx2 = x + 42;
-        int by2 = y + 118;
+        int bx1 = x + 22, by1 = y + 52, bx2 = x + 42, by2 = y + 118;
         gui.fill(bx1, by1, bx2, by2, DARK);
         gui.fill(bx1 + 1, by1 + 1, bx2 - 1, by2 - 1, 0xFF0A2630);
         int innerHeight = by2 - by1 - 2;
         int fill = (int) ((long) innerHeight * energy / capacity);
         gui.fill(bx1 + 1, by2 - 1 - fill, bx2 - 1, by2 - 1, CYAN);
-
         gui.text(font, Component.literal(formatFe(energy)), x + 47, y + 58, TEXT);
         gui.text(font, Component.literal("/ " + formatFe(capacity)), x + 47, y + 70, MUTED);
         gui.text(font, Component.literal("STATUS"), x + 16, y + 112, MUTED);
@@ -134,42 +117,39 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     }
 
     private void drawJob(GuiGraphicsExtractor gui, int x, int y) {
-        int index = Math.max(0, menu.data().get(3));
+        int completed = Math.max(0, menu.data().get(3));
         int total = Math.max(0, menu.data().get(4));
         int shot = Math.max(0, menu.data().get(5));
         boolean running = menu.data().get(6) != 0;
+        boolean entityTarget = menu.data().get(13) != 0;
         int flightTicks = Math.max(1, menu.data().get(12));
 
         gui.text(font, Component.literal("SCHEMATIC / JOB"), x + 96, y + 36, MUTED);
-        int shown = total <= 0 ? 0 : Math.min(total, index + 1);
-        gui.text(font, Component.literal("Block " + shown + " / " + total), x + 96, y + 50, TEXT);
+        int shown = total <= 0 ? 0 : Math.min(total, completed + 1);
+        if (status(menu.data().get(2)) == ConstructorStatus.COMPLETE) shown = total;
+        gui.text(font, Component.literal("Target " + shown + " / " + total), x + 96, y + 50, TEXT);
 
-        int px1 = x + 96;
-        int py1 = y + 64;
-        int px2 = x + 184;
-        int py2 = y + 73;
+        int px1 = x + 96, py1 = y + 64, px2 = x + 184, py2 = y + 73;
         gui.fill(px1, py1, px2, py2, DARK);
         gui.fill(px1 + 1, py1 + 1, px2 - 1, py2 - 1, 0xFF0A2630);
-        int progressWidth = total <= 0 ? 0 : (int) ((long) (px2 - px1 - 2) * Math.min(total, index) / total);
+        int progressWidth = total <= 0 ? 0 : (int) ((long) (px2 - px1 - 2) * Math.min(total, completed) / total);
         if (status(menu.data().get(2)) == ConstructorStatus.COMPLETE) progressWidth = px2 - px1 - 2;
         gui.fill(px1 + 1, py1 + 1, px1 + 1 + progressWidth, py2 - 1, CYAN);
 
-        BlockState target = targetState();
-        gui.text(font, Component.literal("CURRENT BLOCK"), x + 96, y + 80, MUTED);
-        gui.text(font, Component.literal(target == null ? "-" : shortId(target)), x + 96, y + 92, TEXT);
+        gui.text(font, Component.literal(entityTarget ? "CURRENT ENTITY" : "CURRENT BLOCK"), x + 96, y + 80, MUTED);
+        String current = entityTarget ? projectileName() : targetState() == null ? "-" : shortId(targetState());
+        gui.text(font, Component.literal(trim(current, 15)), x + 96, y + 92, TEXT);
 
         gui.text(font, Component.literal("CARD"), x + 96, y + 106, MUTED);
         gui.fill(x + 108, y + 112, x + 136, y + 140, DARK);
         gui.text(font, Component.literal(trim(cardName(), 8)), x + 140, y + 118, TEXT);
         int shotPct = Math.min(100, shot * 100 / flightTicks);
-        gui.text(font, Component.literal((running ? "ACTIVE" : "IDLE") + "  " + shotPct + "%"),
-                x + 140, y + 130, running ? GREEN : ORANGE);
+        gui.text(font, Component.literal((running ? "ACTIVE" : "IDLE") + "  " + shotPct + "%"), x + 140, y + 130, running ? GREEN : ORANGE);
     }
 
     private void drawTarget(GuiGraphicsExtractor gui, int x, int y) {
         int cost = Math.max(0, menu.data().get(7));
         BlockPos target = targetPos();
-
         gui.text(font, Component.literal("TARGET"), x + 200, y + 36, MUTED);
         if (target == null) {
             gui.text(font, Component.literal("No target"), x + 200, y + 52, TEXT);
@@ -178,13 +158,14 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
             gui.text(font, Component.literal("Y " + target.getY()), x + 200, y + 64, TEXT);
             gui.text(font, Component.literal("Z " + target.getZ()), x + 200, y + 76, TEXT);
         }
-
         gui.text(font, Component.literal("COST / SHOT"), x + 200, y + 94, MUTED);
         gui.text(font, Component.literal(formatFe(cost)), x + 200, y + 106, CYAN);
 
         ConstructorStatus s = status(menu.data().get(2));
-        if (s == ConstructorStatus.WAITING_MATERIAL) gui.text(font, Component.literal("MATERIAL"), x + 200, y + 122, ORANGE);
-        else if (s == ConstructorStatus.WAITING_ENERGY) gui.text(font, Component.literal("LOW FE"), x + 200, y + 122, ORANGE);
+        if (s == ConstructorStatus.WAITING_MATERIAL) {
+            String missing = missingMaterialName();
+            gui.text(font, Component.literal(missing.isBlank() ? "MATERIAL" : trim(missing, 10)), x + 200, y + 122, ORANGE);
+        } else if (s == ConstructorStatus.WAITING_ENERGY) gui.text(font, Component.literal("LOW FE"), x + 200, y + 122, ORANGE);
         else if (s == ConstructorStatus.BLOCKED) gui.text(font, Component.literal("BLOCKED"), x + 200, y + 122, RED);
         else if (s == ConstructorStatus.ERROR) gui.text(font, Component.literal("SCHEMATIC ERROR"), x + 200, y + 122, RED);
     }
@@ -194,6 +175,18 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         ItemStack card = menu.constructor().schematicCard();
         if (!(card.getItem() instanceof SchematicCardItem)) return "No card";
         return SchematicCardItem.sourceName(card);
+    }
+
+    private String projectileName() {
+        if (menu.constructor() == null) return "Entity";
+        ItemStack stack = menu.constructor().projectileItem();
+        return stack.isEmpty() ? "Entity" : stack.getHoverName().getString();
+    }
+
+    private String missingMaterialName() {
+        if (menu.constructor() == null) return "";
+        ItemStack stack = menu.constructor().missingItem();
+        return stack.isEmpty() ? "" : stack.getHoverName().getString();
     }
 
     private BlockState targetState() { return menu.constructor() == null ? null : menu.constructor().targetState(); }
@@ -265,7 +258,5 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         return value.length() <= max ? value : value.substring(0, Math.max(1, max - 1)) + "…";
     }
 
-    @Override
-    protected void extractLabels(GuiGraphicsExtractor gui, int mouseX, int mouseY) {
-    }
+    @Override protected void extractLabels(GuiGraphicsExtractor gui, int mouseX, int mouseY) {}
 }

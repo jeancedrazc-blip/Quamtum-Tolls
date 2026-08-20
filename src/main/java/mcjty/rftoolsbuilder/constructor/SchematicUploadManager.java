@@ -3,7 +3,12 @@ package mcjty.rftoolsbuilder.constructor;
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -19,7 +24,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Server-side chunked schematic receiver. The output card is emitted only after checksum and parser validation. */
+/** Server-side chunked schematic receiver. Output is emitted only after checksum and parser validation. */
 public final class SchematicUploadManager {
     public static final int MAX_CHUNK_BYTES = 24 * 1024;
     public static final long MAX_FILE_BYTES = 32L * 1024L * 1024L;
@@ -38,12 +43,14 @@ public final class SchematicUploadManager {
         final String relativeFinalPath;
         final OutputStream stream;
         final MessageDigest digest;
+        final ResourceKey<Level> dimension;
         long received;
         long lastActivityNanos;
 
         Session(String displayName, String clientRelativeFile, SchematicFolderIndex.Format format,
                 long totalBytes, String expectedHash, Path tempPath, Path finalPath,
-                String relativeFinalPath, OutputStream stream, MessageDigest digest) {
+                String relativeFinalPath, OutputStream stream, MessageDigest digest,
+                ResourceKey<Level> dimension) {
             this.displayName = displayName;
             this.clientRelativeFile = clientRelativeFile;
             this.format = format;
@@ -54,6 +61,7 @@ public final class SchematicUploadManager {
             this.relativeFinalPath = relativeFinalPath;
             this.stream = stream;
             this.digest = digest;
+            this.dimension = dimension;
             touch();
         }
 
@@ -65,7 +73,6 @@ public final class SchematicUploadManager {
     private SchematicUploadManager() {}
 
     public static void begin(ServerPlayer player, BlockPos tablePos, String rawClientFile, String formatId, long size, String sha256) {
-        cleanupExpired();
         SchematicTableBlockEntity table = table(player, tablePos);
         if (table == null) return;
 
@@ -108,15 +115,15 @@ public final class SchematicUploadManager {
             OutputStream stream = Files.newOutputStream(tempPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             String relative = root.relativize(finalPath).toString().replace('\\', '/');
-            ACTIVE.put(key, new Session(safeName, clientRelative, format, size, expected, tempPath, finalPath, relative, stream, digest));
+            ACTIVE.put(key, new Session(safeName, clientRelative, format, size, expected,
+                    tempPath, finalPath, relative, stream, digest, player.level().dimension()));
         } catch (IOException | NoSuchAlgorithmException exception) {
             table.cancelUpload(true);
-            player.sendSystemMessage(Component.literal("Could not start schematic upload: " + exception.getMessage()));
+            player.sendSystemMessage(Component.literal("Could not start schematic upload: " + safeMessage(exception)));
         }
     }
 
     public static void chunk(ServerPlayer player, BlockPos tablePos, byte[] data) {
-        cleanupExpired();
         if (data == null || data.length == 0 || data.length > MAX_CHUNK_BYTES) {
             cancel(player, tablePos, true, "Invalid schematic packet size");
             return;
@@ -126,6 +133,10 @@ public final class SchematicUploadManager {
         SchematicTableBlockEntity table = table(player, tablePos);
         if (session == null || table == null || !table.isUploadOwner(player)) {
             cancel(player, tablePos, true, "No active schematic upload");
+            return;
+        }
+        if (!player.level().dimension().equals(session.dimension)) {
+            cancel(player, tablePos, true, "Schematic upload cancelled after dimension change");
             return;
         }
         if (session.received + data.length > session.totalBytes) {
@@ -144,11 +155,11 @@ public final class SchematicUploadManager {
     }
 
     public static void finish(ServerPlayer player, BlockPos tablePos) {
-        cleanupExpired();
         Key key = new Key(player.getUUID(), tablePos.asLong());
         Session session = ACTIVE.remove(key);
         SchematicTableBlockEntity table = table(player, tablePos);
-        if (session == null || table == null || !table.isUploadOwner(player)) {
+        if (session == null || table == null || !table.isUploadOwner(player)
+                || !player.level().dimension().equals(session.dimension)) {
             closeAndDelete(session);
             if (table != null) table.cancelUpload(true);
             return;
@@ -185,13 +196,41 @@ public final class SchematicUploadManager {
         if (reason != null && !reason.isBlank()) player.sendSystemMessage(Component.literal(reason));
     }
 
-    private static void cleanupExpired() {
+    /**
+     * Cleans abandoned sessions even when the client never sends another packet.
+     * The reserved input is restored immediately if the table chunk is loaded;
+     * otherwise the table's own load recovery restores it when the chunk loads.
+     */
+    public static void serverTick(ServerTickEvent.Post event) {
+        if (ACTIVE.isEmpty()) return;
+        MinecraftServer server = event.getServer();
         long now = System.nanoTime();
         for (Map.Entry<Key, Session> entry : ACTIVE.entrySet()) {
+            Key key = entry.getKey();
             Session session = entry.getValue();
-            if (now - session.lastActivityNanos <= SESSION_TIMEOUT_NANOS) continue;
-            if (ACTIVE.remove(entry.getKey(), session)) closeAndDelete(session);
+            ServerPlayer player = server.getPlayerList().getPlayer(key.player());
+            boolean disconnected = player == null || player.hasDisconnected();
+            boolean wrongDimension = player != null && !player.level().dimension().equals(session.dimension);
+            boolean timedOut = now - session.lastActivityNanos > SESSION_TIMEOUT_NANOS;
+            if (!disconnected && !wrongDimension && !timedOut) continue;
+
+            if (!ACTIVE.remove(key, session)) continue;
+            closeAndDelete(session);
+            restoreReservedCardIfLoaded(server, key, session);
+            if (player != null && !player.hasDisconnected()) {
+                String reason = wrongDimension ? "Schematic upload cancelled after dimension change"
+                        : "Schematic upload timed out; input card restored";
+                player.sendSystemMessage(Component.literal(reason));
+            }
         }
+    }
+
+    private static void restoreReservedCardIfLoaded(MinecraftServer server, Key key, Session session) {
+        ServerLevel level = server.getLevel(session.dimension);
+        if (level == null) return;
+        BlockPos pos = BlockPos.of(key.tablePos());
+        if (!level.hasChunkAt(pos)) return;
+        if (level.getBlockEntity(pos) instanceof SchematicTableBlockEntity table) table.cancelUpload(true);
     }
 
     private static SchematicTableBlockEntity table(ServerPlayer player, BlockPos pos) {

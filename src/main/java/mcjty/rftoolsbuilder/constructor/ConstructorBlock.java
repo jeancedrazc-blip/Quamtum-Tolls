@@ -3,6 +3,7 @@ package mcjty.rftoolsbuilder.constructor;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -74,5 +75,13 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.PASS;
+    }
+
+    @Override
+    public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
+        if (!level.isClientSide() && !player.isCreative() && level.getBlockEntity(pos) instanceof ConstructorBlockEntity constructor) {
+            Containers.dropContents(level, pos, constructor);
+        }
+        return super.playerWillDestroy(level, pos, state, player);
     }
 }

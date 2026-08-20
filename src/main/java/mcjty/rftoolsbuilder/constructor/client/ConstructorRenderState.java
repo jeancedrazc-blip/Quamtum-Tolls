@@ -8,6 +8,7 @@ import net.minecraft.client.renderer.item.ItemStackRenderState;
 public final class ConstructorRenderState extends BlockEntityRenderState {
     public final BlockModelRenderState turret = new BlockModelRenderState();
     public final BlockModelRenderState barrel = new BlockModelRenderState();
+    public final BlockModelRenderState baseEnergyChannel = new BlockModelRenderState();
     public final BlockModelRenderState energyChannel = new BlockModelRenderState();
     public final BlockModelRenderState projectile = new BlockModelRenderState();
     public final ItemStackRenderState entityProjectile = new ItemStackRenderState();
@@ -26,5 +27,6 @@ public final class ConstructorRenderState extends BlockEntityRenderState {
     public boolean hasTarget;
     public boolean projectileVisible;
     public boolean projectileIsItem;
+    public boolean energyActive;
     public ConstructorStatus status = ConstructorStatus.IDLE;
 }

@@ -1,0 +1,1 @@
+The approved visual source hashes and behavioral interpretation are locked in this folder. Binary reference copies are being archived alongside this manifest so future work must compare against the exact approved visual direction rather than reconstructing it from memory.

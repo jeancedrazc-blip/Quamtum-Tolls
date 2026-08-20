@@ -79,6 +79,7 @@ public final class ConstructorBootstrap {
     public static synchronized void init(IEventBus modBus) {
         if (initialized) return;
         initialized = true;
+        ConstructorCompatibilityBootstrap.registerDefaults();
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         BLOCK_ENTITY_TYPES.register(modBus);

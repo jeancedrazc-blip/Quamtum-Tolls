@@ -2,6 +2,7 @@ package mcjty.rftoolsbuilder.constructor;
 
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionEntityEntry;
 import mcjty.rftoolsbuilder.constructor.plan.ConstructionPlan;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtAccounter;
@@ -19,14 +20,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Complete format-neutral schematic loader used by the pipeline.
- *
- * SchematicPlanLoader remains the block adapter. This layer additionally
- * normalizes entity records from every supported format into the exact same
- * coordinate space. Keeping this concern separate makes the entity import
- * rules auditable without weakening the mature block decoders.
- */
+/** Complete format-neutral schematic loader used by preview and printing. */
 public final class SchematicPipelineLoader {
     private static final long MAX_NBT_BYTES = 0x20000000L;
 
@@ -36,7 +30,10 @@ public final class SchematicPipelineLoader {
         ConstructionPlan blocks = SchematicPlanLoader.load(entry, includeAir);
         List<ConstructionEntityEntry> entities = loadEntities(entry);
         if (entities.isEmpty()) return blocks;
-        return new ConstructionPlan(blocks.entries(), entities);
+        // Entity centers may sit on the outer face of the declared cuboid. They
+        // must never enlarge or shift the block bounds recorded on the card.
+        return new ConstructionPlan(blocks.entries(), entities, BlockPos.ZERO,
+                blocks.sizeX(), blocks.sizeY(), blocks.sizeZ());
     }
 
     public static ConstructionPlan load(SchematicFolderIndex.Entry entry) throws IOException {
@@ -94,9 +91,9 @@ public final class SchematicPipelineLoader {
     }
 
     /**
-     * Sponge v1/v2 store entity position in schematic coordinates and data in
-     * the outer record. WorldEdit v3 stores Pos relative to schematic minimum
-     * and nests the entity payload under Data.
+     * WorldEdit v1/v2 write Pos in schematic coordinates and keep entity data
+     * in the outer record. Sponge v3 writes Pos relative to schematic minimum
+     * and nests the payload under Data.
      */
     private static List<ConstructionEntityEntry> readSpongeEntities(CompoundTag originalRoot) {
         CompoundTag root = originalRoot;
@@ -135,9 +132,8 @@ public final class SchematicPipelineLoader {
     }
 
     /**
-     * Litematica v2+ stores each entity NBT directly in a region and its Pos is
-     * relative to that region's Position. Version 1 wraps EntityData but uses
-     * the same region-relative position.
+     * Litematica v2+ stores direct entity NBT in each region; Pos is relative
+     * to that region's Position. Version 1 wraps the payload as EntityData.
      */
     private static List<ConstructionEntityEntry> readLitematicEntities(CompoundTag root) {
         ArrayList<ConstructionEntityEntry> result = new ArrayList<>();
@@ -182,11 +178,7 @@ public final class SchematicPipelineLoader {
         return result;
     }
 
-    /**
-     * Never preserve identity/transport state from a captured entity. A new
-     * entity must receive a new UUID and authoritative target position when the
-     * Constructor materializes it.
-     */
+    /** Remove captured identity and rewrite Pos to normalized schematic-relative coordinates. */
     private static void normalizeEntityPayload(CompoundTag data, Vec3 relative) {
         data.remove("UUID");
         data.remove("UUIDMost");
@@ -198,9 +190,12 @@ public final class SchematicPipelineLoader {
         pos.add(net.minecraft.nbt.DoubleTag.valueOf(relative.y));
         pos.add(net.minecraft.nbt.DoubleTag.valueOf(relative.z));
         data.put("Pos", pos);
-        data.putDouble("MotionX", 0.0D); // harmless compatibility breadcrumbs for older payload processors
-        data.putDouble("MotionY", 0.0D);
-        data.putDouble("MotionZ", 0.0D);
+        // Captured velocity must never be replayed by a construction machine.
+        ListTag motion = new ListTag();
+        motion.add(net.minecraft.nbt.DoubleTag.valueOf(0.0D));
+        motion.add(net.minecraft.nbt.DoubleTag.valueOf(0.0D));
+        motion.add(net.minecraft.nbt.DoubleTag.valueOf(0.0D));
+        data.put("Motion", motion);
     }
 
     private static Vec3 readVec(ListTag list) {

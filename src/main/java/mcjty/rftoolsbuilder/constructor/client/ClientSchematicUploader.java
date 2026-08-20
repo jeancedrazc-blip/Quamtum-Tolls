@@ -6,7 +6,7 @@ import mcjty.rftoolsbuilder.constructor.SchematicUploadManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.network.ClientPacketDistributor;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -62,8 +62,9 @@ public final class ClientSchematicUploader {
     }
 
     private static void message(String message) {
-        if (Minecraft.getInstance().player != null) {
-            Minecraft.getInstance().player.displayClientMessage(Component.literal(message), false);
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.gui != null) {
+            minecraft.gui.getChat().addClientSystemMessage(Component.literal(message));
         }
     }
 

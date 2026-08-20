@@ -3,88 +3,39 @@ name: Quantum Tools source build
 on:
   push:
     branches:
-      - "source/3.0.6-dev.9-placement-editor"
       - "source/3.0.6-dev.9-placement-editor-v5sync"
-    paths-ignore:
-      - "ci/**"
+  pull_request:
+    branches:
+      - "main"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Restore approved Constructor V5 assets into source
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -f reconstruction/constructor-v5-approved-assets.zip ]; then
-            unzip -oq reconstruction/constructor-v5-approved-assets.zip -d src/main/resources
-          fi
-
-      - uses: actions/setup-java@v4
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.1'
 
-      - name: Compile and publish CI result
-        shell: bash
-        run: |
-          set -u
-          mkdir -p ci
-          echo "$GITHUB_SHA" > ci/source_commit.txt
-          set +e
-          gradle build --stacktrace > ci/build.log 2>&1
-          code=$?
-          set -e
+      - name: Compile Quantum Tools
+        run: gradle build --stacktrace
 
-          if [ "$code" -eq 0 ]; then
-            echo "SUCCESS" > ci/status.txt
-            jar_path="$(find build/libs -maxdepth 1 -type f -name '*.jar' | head -n 1)"
-            if [ -z "$jar_path" ]; then
-              echo "BUILD SUCCEEDED BUT NO JAR FOUND" > ci/status.txt
-              code=2
-            else
-              base64 -w 0 "$jar_path" > ci/quantum-tools-dev9.jar.base64
-              sha256sum "$jar_path" > ci/artifact.sha256
-            fi
-          else
-            echo "FAILED ($code)" > ci/status.txt
-            rm -f ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256
-          fi
-
-          git config user.name "Quantum Tools CI"
-          git config user.email "actions@users.noreply.github.com"
-
-          # Source assets restored from the approved V5 package are committed
-          # alongside the validated build result so GitHub remains the source of truth.
-          git add -- src/main/resources/assets/rftoolsbuilder/models/block/constructor.json \
-                    src/main/resources/assets/rftoolsbuilder/models/block/constructor_barrel_visual.json \
-                    src/main/resources/assets/rftoolsbuilder/models/block/constructor_turret_visual.json \
-                    src/main/resources/assets/rftoolsbuilder/models/block/constructor_energy_visual.json \
-                    src/main/resources/assets/rftoolsbuilder/models/item/constructor.json \
-                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_cyan.png \
-                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_dark.png \
-                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_white.png \
-                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_metal.png \
-                    src/main/resources/assets/rftoolsbuilder/textures/block/constructor_vent.png \
-                    ci/status.txt ci/build.log ci/source_commit.txt
-          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then
-            git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256
-          fi
-
-          if ! git diff --cached --quiet; then
-            git commit -m "Sync approved V5 assets and record source build"
-            git push origin HEAD:"${GITHUB_REF_NAME}"
-          fi
-          exit "$code"
+      - name: Upload compiled JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantum-tools-3.0.6-dev.9
+          path: build/libs/*.jar
+          if-no-files-found: error

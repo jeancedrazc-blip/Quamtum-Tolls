@@ -7,6 +7,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 
 @EventBusSubscriber(modid = ConstructorBootstrap.MOD_ID, value = Dist.CLIENT)
 public final class ConstructorClient {
@@ -27,5 +28,10 @@ public final class ConstructorClient {
     @SubscribeEvent
     public static void registerKeyMappings(RegisterKeyMappingsEvent event) {
         SchematicPlacementHandler.registerKeys(event);
+    }
+
+    @SubscribeEvent
+    public static void registerClientPayloadHandlers(RegisterClientPayloadHandlersEvent event) {
+        ConstructorClientNetworking.register(event);
     }
 }

@@ -6,6 +6,7 @@ on:
       - "source/3.0.6-dev.10-constructor-vanilla-blue"
     paths-ignore:
       - "ci/**"
+      - "dist/**"
   pull_request:
     branches:
       - "main"
@@ -60,22 +61,23 @@ jobs:
         shell: bash
         run: |
           set +e
-          mkdir -p ci
+          mkdir -p ci dist
           gradle build --stacktrace > ci/dev10-build.log 2>&1
           code=$?
           set -e
           if [ "$code" -eq 0 ]; then
             echo "SUCCESS" > ci/dev10-status.txt
             jar_path="$(find build/libs -maxdepth 1 -type f -name '*.jar' | head -n 1)"
+            test -n "$jar_path"
             sha256sum "$jar_path" > ci/dev10-artifact.sha256
-            base64 -w 4096 "$jar_path" > ci/quantum-tools-dev10.jar.base64
+            cp "$jar_path" dist/QuantumTools-3.0.6-dev.10-constructor-vanilla-blue.jar
           else
             echo "FAILED ($code)" > ci/dev10-status.txt
-            rm -f ci/dev10-artifact.sha256 ci/quantum-tools-dev10.jar.base64
+            rm -f ci/dev10-artifact.sha256 dist/QuantumTools-3.0.6-dev.10-constructor-vanilla-blue.jar
           fi
           exit "$code"
 
-      - name: Persist push-build verification
+      - name: Persist verified push build
         if: always() && github.event_name == 'push'
         shell: bash
         run: |
@@ -83,10 +85,10 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add ci/dev10-status.txt ci/dev10-build.log
           if [ -f ci/dev10-artifact.sha256 ]; then
-            git add ci/dev10-artifact.sha256 ci/quantum-tools-dev10.jar.base64
+            git add ci/dev10-artifact.sha256 dist/QuantumTools-3.0.6-dev.10-constructor-vanilla-blue.jar
           fi
           if ! git diff --cached --quiet; then
-            git commit -m "Record dev10 source build verification"
+            git commit -m "Publish verified dev10 source build"
             git push origin HEAD:source/3.0.6-dev.10-constructor-vanilla-blue
           fi
 

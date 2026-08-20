@@ -67,20 +67,21 @@ jobs:
               echo "BUILD SUCCEEDED BUT NO JAR FOUND" > ci/status.txt
               code=2
             else
-              base64 -w 0 "$jar_path" > ci/quantum-tools-dev9.jar.base64
+              base64 -w 4096 "$jar_path" > ci/quantum-tools-dev9.jar.base64
+              wc -l < ci/quantum-tools-dev9.jar.base64 > ci/artifact.lines
               sha256sum "$jar_path" > ci/artifact.sha256
             fi
           else
             echo "FAILED ($code)" > ci/status.txt
-            rm -f ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256
+            rm -f ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines
           fi
 
           git config user.name "Quantum Tools CI"
           git config user.email "actions@users.noreply.github.com"
           git add -- src/main/resources ci/status.txt ci/build.log
-          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256; fi
+          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines; fi
           if ! git diff --cached --quiet; then
-            git commit -m "Sync approved V5 assets and record source build"
+            git commit -m "Record wrapped dev9 build artifact"
             git push origin HEAD:source/3.0.6-dev.9-placement-editor
           fi
           exit "$code"

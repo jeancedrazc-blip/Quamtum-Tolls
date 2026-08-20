@@ -262,9 +262,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
             return;
         }
 
-        if (!shotReserved) {
-            if (!prepareShotIfPossible(level)) return;
-        }
+        if (!shotReserved && !prepareShotIfPossible(level)) return;
 
         switch (status) {
             case READY, WAITING_ENERGY, WAITING_MATERIAL, WAITING_CHUNK -> {
@@ -337,11 +335,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         }
 
         if (!ConstructorMaterialAccess.hasOne(level, worldPosition, targetState)) {
-            if (skipMissing) {
-                skipCurrentAndAdvance();
-            } else {
-                transition(ConstructorStatus.WAITING_MATERIAL);
-            }
+            if (skipMissing) skipCurrentAndAdvance(); else transition(ConstructorStatus.WAITING_MATERIAL);
             return false;
         }
 
@@ -353,7 +347,8 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         if (current.isAir()) return true;
         return switch (replaceMode) {
             case DONT_REPLACE -> false;
-            case REPLACE_SOLID -> desired.isRedstoneConductor(level, targetPos);
+            case REPLACE_SOLID -> desired.isRedstoneConductor(level, targetPos)
+                    || !current.isRedstoneConductor(level, targetPos);
             case REPLACE_ANY, REPLACE_EMPTY -> true;
         };
     }
@@ -361,8 +356,6 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
     private boolean shouldIgnoreSchematicState(BlockState state) {
         if (state == null || state.getBlock() == Blocks.STRUCTURE_VOID) return true;
         if (state.getBlock() instanceof PistonHeadBlock) return true;
-        // Fluids and other non-item virtual states cannot be consumed safely by a
-        // generic cross-mod constructor. Air remains meaningful in clear mode.
         return !state.isAir() && state.getBlock().asItem() == net.minecraft.world.item.Items.AIR
                 && ConstructorMaterialAccess.requiresMaterial(state);
     }
@@ -432,16 +425,11 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         if (data == null || data.isEmpty()) return;
         BlockEntity blockEntity = level.getBlockEntity(targetPos);
         if (blockEntity == null) return;
-        try {
-            data.putInt("x", targetPos.getX());
-            data.putInt("y", targetPos.getY());
-            data.putInt("z", targetPos.getZ());
-            blockEntity.loadWithComponents(data, level.registryAccess());
-            blockEntity.setChanged();
-        } catch (RuntimeException ignored) {
-            // The block itself is still valid; incompatible BE payloads must not
-            // abort the entire schematic.
-        }
+        CompoundTag relocated = data.copy();
+        relocated.putInt("x", targetPos.getX());
+        relocated.putInt("y", targetPos.getY());
+        relocated.putInt("z", targetPos.getZ());
+        ConstructorBlockEntityDataCompat.apply(blockEntity, relocated, level);
     }
 
     private void blockShotAtImpact() {
@@ -454,11 +442,8 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
 
     private void skipCurrentAndAdvance() {
         shotReserved = false;
-        if (activeJob != null && activeJob.skipCurrent()) {
-            loadCurrentFromJob();
-        } else {
-            finishJob(0);
-        }
+        if (activeJob != null && activeJob.skipCurrent()) loadCurrentFromJob();
+        else finishJob(0);
     }
 
     private void finishCurrentAndAdvance(int finishedShotProgress) {
@@ -506,15 +491,11 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
     }
 
     private void syncClientState() {
-        if (level instanceof ServerLevel server) {
-            server.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
-        }
+        if (level instanceof ServerLevel server) server.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
 
     @Override
-    public Component getDisplayName() {
-        return Component.literal("Constructor");
-    }
+    public Component getDisplayName() { return Component.literal("Constructor"); }
 
     @Override
     public AbstractContainerMenu createMenu(int id, Inventory inventory, Player player) {
@@ -522,14 +503,10 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
     }
 
     @Override
-    public CompoundTag getUpdateTag(HolderLookup.Provider provider) {
-        return saveWithoutMetadata(provider);
-    }
+    public CompoundTag getUpdateTag(HolderLookup.Provider provider) { return saveWithoutMetadata(provider); }
 
     @Override
-    public Packet<ClientGamePacketListener> getUpdatePacket() {
-        return ClientboundBlockEntityDataPacket.create(this);
-    }
+    public Packet<ClientGamePacketListener> getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }
 
     @Override
     protected void saveAdditional(ValueOutput output) {
@@ -569,12 +546,15 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         targetState = input.read("TargetState", BlockState.CODEC).orElse(null);
         items.set(SLOT_SCHEMATIC, input.read("SchematicCard", ItemStack.CODEC).orElse(ItemStack.EMPTY));
 
-        // The runtime queue is reconstructed from the card. Never continue a
-        // partially persisted single target as if it were the whole schematic.
-        if (running) {
+        if (running || shotReserved) {
             running = false;
             shotReserved = false;
-            status = ConstructorStatus.PAUSED;
+            activeJob = null;
+            targetPos = null;
+            targetState = null;
+            status = ConstructorStatus.IDLE;
+            phaseTick = 0;
+            shotProgress = 0;
         }
     }
 
@@ -625,12 +605,7 @@ public final class ConstructorBlockEntity extends BlockEntity implements MenuPro
         public int getEnergyStored() { return (int) getAmountAsLong(); }
         public int getMaxEnergyStored() { return (int) getCapacityAsLong(); }
 
-        private void consume(int amount) {
-            this.energy = Math.max(0, this.energy - Math.max(0, amount));
-        }
-
-        private void setStored(int amount) {
-            this.energy = Math.max(0, Math.min(this.capacity, amount));
-        }
+        private void consume(int amount) { this.energy = Math.max(0, this.energy - Math.max(0, amount)); }
+        private void setStored(int amount) { this.energy = Math.max(0, Math.min(this.capacity, amount)); }
     }
 }

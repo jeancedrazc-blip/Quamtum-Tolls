@@ -10,13 +10,15 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 public final class ConstructorMenu extends AbstractContainerMenu {
+    public static final int DATA_COUNT = 14;
+
     private final ConstructorBlockEntity constructor;
     private final ContainerData data;
 
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
                 inventory.player.level().getBlockEntity(buffer.readBlockPos()) instanceof ConstructorBlockEntity found ? found : null,
-                new SimpleContainerData(13));
+                new SimpleContainerData(DATA_COUNT));
     }
 
     public ConstructorMenu(int id, Inventory inventory, ConstructorBlockEntity constructor, ContainerData data) {

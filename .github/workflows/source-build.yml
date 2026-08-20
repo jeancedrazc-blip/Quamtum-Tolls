@@ -6,6 +6,9 @@ on:
       - "source/3.0.6-dev.9-placement-editor"
     paths-ignore:
       - "ci/**"
+  pull_request:
+    branches:
+      - "main"
   workflow_dispatch:
 
 permissions:
@@ -72,9 +75,6 @@ jobs:
               wc -l < ci/quantum-tools-dev9.jar.base64 > ci/artifact.lines
               sha256sum "$jar_path" > ci/artifact.sha256
 
-              # Export every compiled class belonging to the new placement editor.
-              # This lets the final test JAR patch the complete approved V5 binary
-              # instead of replacing the whole mod with the Constructor-only source build.
               mkdir -p ci/editor-classes
               unzip -Z1 "$jar_path" \
                 | grep -E '^mcjty/rftoolsbuilder/constructor/client/(ConstructorClient|SchematicPlacementHandler|SchematicPlacementScreen)(\$.*)?\.class$' \
@@ -91,14 +91,25 @@ jobs:
             rm -rf ci/editor-classes
           fi
 
-          git config user.name "Quantum Tools CI"
-          git config user.email "actions@users.noreply.github.com"
-          git add -- src/main/resources ci/status.txt ci/build.log
-          if [ -f ci/quantum-tools-dev9.jar.base64 ]; then
-            git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines ci/editor-class-list.txt ci/editor-classes
-          fi
-          if ! git diff --cached --quiet; then
-            git commit -m "Export verified placement editor classes"
-            git push origin HEAD:source/3.0.6-dev.9-placement-editor
+          # Persist CI diagnostics only for branch-push builds. PR builds remain read-only.
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            git config user.name "Quantum Tools CI"
+            git config user.email "actions@users.noreply.github.com"
+            git add -- src/main/resources ci/status.txt ci/build.log
+            if [ -f ci/quantum-tools-dev9.jar.base64 ]; then
+              git add -- ci/quantum-tools-dev9.jar.base64 ci/artifact.sha256 ci/artifact.lines ci/editor-class-list.txt ci/editor-classes
+            fi
+            if ! git diff --cached --quiet; then
+              git commit -m "Export verified placement editor classes"
+              git push origin HEAD:source/3.0.6-dev.9-placement-editor
+            fi
           fi
           exit "$code"
+
+      - name: Upload compiled Constructor source artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantum-tools-dev9-placement-editor
+          path: build/libs/*.jar
+          if-no-files-found: error

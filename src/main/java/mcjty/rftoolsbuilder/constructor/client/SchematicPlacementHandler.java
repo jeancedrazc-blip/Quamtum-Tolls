@@ -31,13 +31,12 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Mouse/UI-driven schematic deployment controller.
+ * Client-side schematic deployment editor.
  *
- * There are deliberately no key mappings here. Right-clicking a written
- * Schematic Card opens {@link SchematicPlacementScreen}; after that the anchor,
- * rotation and mirror are changed only by explicit UI actions. The player's
- * crosshair is sampled only when the editor is opened or when the user presses
- * the target button.
+ * The editing model deliberately follows the Create schematic workflow: a
+ * schematic has a persistent anchor plus rotation/mirror state, while a tool
+ * mode decides how the user manipulates that transform. The card is only
+ * synchronized after an explicit confirm. No mandatory key mappings are used.
  */
 public final class SchematicPlacementHandler {
     private static final BlockDisplayContext DISPLAY_CONTEXT = BlockDisplayContext.create();
@@ -57,6 +56,7 @@ public final class SchematicPlacementHandler {
     private static BlockPos resetAnchor = BlockPos.ZERO;
     private static int resetRotation;
     private static int resetMirror;
+    private static SchematicPlacementTool tool = SchematicPlacementTool.DEPLOY;
 
     private SchematicPlacementHandler() {}
 
@@ -108,9 +108,11 @@ public final class SchematicPlacementHandler {
 
         if (SchematicCardItem.deployed(card)) {
             editAnchor = SchematicCardItem.anchor(card);
+            tool = SchematicPlacementTool.MOVE_XZ;
         } else {
             BlockPos target = lookAnchor(mc);
             editAnchor = target != null ? target : centeredInFront(mc, 4);
+            tool = SchematicPlacementTool.DEPLOY;
         }
 
         resetAnchor = editAnchor;
@@ -121,6 +123,11 @@ public final class SchematicPlacementHandler {
     }
 
     public static boolean isEditing() { return editing; }
+    public static SchematicPlacementTool tool() { return tool; }
+    public static void setTool(SchematicPlacementTool value) {
+        if (!editing || value == null) return;
+        tool = value;
+    }
 
     public static boolean hasValidCard() {
         return isWrittenCard(currentCard(Minecraft.getInstance()));
@@ -155,6 +162,14 @@ public final class SchematicPlacementHandler {
         return isWrittenCard(card) ? SchematicCardItem.sizeZ(card) : 0;
     }
 
+    public static int transformedSizeX() {
+        return (Math.floorMod(editRotation, 4) & 1) == 0 ? Math.max(1, sizeX()) : Math.max(1, sizeZ());
+    }
+
+    public static int transformedSizeZ() {
+        return (Math.floorMod(editRotation, 4) & 1) == 0 ? Math.max(1, sizeZ()) : Math.max(1, sizeX());
+    }
+
     public static boolean previewReady() {
         return plan != null && plan.totalTargets() > 0;
     }
@@ -163,9 +178,53 @@ public final class SchematicPlacementHandler {
         return plan == null ? 0 : plan.blockCount();
     }
 
+    public static int previewEntityCount() {
+        return plan == null ? 0 : plan.entityCount();
+    }
+
+    public static void setAnchor(BlockPos anchor) {
+        if (!editing || anchor == null) return;
+        editAnchor = anchor.immutable();
+    }
+
+    public static void setAnchorX(int x) {
+        if (!editing) return;
+        editAnchor = new BlockPos(x, editAnchor.getY(), editAnchor.getZ());
+    }
+
+    public static void setAnchorY(int y) {
+        if (!editing) return;
+        editAnchor = new BlockPos(editAnchor.getX(), y, editAnchor.getZ());
+    }
+
+    public static void setAnchorZ(int z) {
+        if (!editing) return;
+        editAnchor = new BlockPos(editAnchor.getX(), editAnchor.getY(), z);
+    }
+
     public static void nudge(int dx, int dy, int dz) {
         if (!editing) return;
         editAnchor = editAnchor.offset(dx, dy, dz);
+    }
+
+    /** Move in schematic-local X/Z space, honoring mirror and rotation. */
+    public static void nudgeLocal(int localX, int localZ) {
+        if (!editing) return;
+        int x = localX;
+        int z = localZ;
+        if (editMirror == 1) x = -x;
+        if (editMirror == 2) z = -z;
+
+        int q = Math.floorMod(editRotation, 4);
+        int wx;
+        int wz;
+        switch (q) {
+            case 1 -> { wx = -z; wz = x; }
+            case 2 -> { wx = -x; wz = -z; }
+            case 3 -> { wx = z; wz = -x; }
+            default -> { wx = x; wz = z; }
+        }
+        nudge(wx, 0, wz);
     }
 
     public static void setRotation(int quarterTurns) {
@@ -174,10 +233,25 @@ public final class SchematicPlacementHandler {
         MODEL_CACHE.clear();
     }
 
+    public static void rotate90(boolean clockwise) {
+        if (!editing) return;
+        setRotation(editRotation + (clockwise ? 1 : -1));
+    }
+
     public static void setMirror(int mirror) {
         if (!editing) return;
         editMirror = Math.max(0, Math.min(2, mirror));
         MODEL_CACHE.clear();
+    }
+
+    public static void flipX() {
+        if (!editing) return;
+        setMirror(editMirror == 1 ? 0 : 1);
+    }
+
+    public static void flipZ() {
+        if (!editing) return;
+        setMirror(editMirror == 2 ? 0 : 2);
     }
 
     public static void placeAtLook() {
@@ -207,6 +281,7 @@ public final class SchematicPlacementHandler {
         editAnchor = resetAnchor;
         editRotation = resetRotation;
         editMirror = resetMirror;
+        tool = hasSavedDeployment() ? SchematicPlacementTool.MOVE_XZ : SchematicPlacementTool.DEPLOY;
         MODEL_CACHE.clear();
     }
 
@@ -239,14 +314,6 @@ public final class SchematicPlacementHandler {
     public static void cancel() {
         editing = false;
         MODEL_CACHE.clear();
-    }
-
-    private static int transformedSizeX() {
-        return (Math.floorMod(editRotation, 4) & 1) == 0 ? Math.max(1, sizeX()) : Math.max(1, sizeZ());
-    }
-
-    private static int transformedSizeZ() {
-        return (Math.floorMod(editRotation, 4) & 1) == 0 ? Math.max(1, sizeZ()) : Math.max(1, sizeX());
     }
 
     private static BlockPos centeredInFront(Minecraft mc, int distance) {

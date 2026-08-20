@@ -3,6 +3,7 @@ package mcjty.rftoolsbuilder.constructor.client;
 import mcjty.rftoolsbuilder.constructor.ConstructorBlockEntity;
 import mcjty.rftoolsbuilder.constructor.ConstructorMenu;
 import mcjty.rftoolsbuilder.constructor.ConstructorStatus;
+import mcjty.rftoolsbuilder.constructor.SchematicCardItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -11,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class ConstructorScreen extends AbstractContainerScreen<ConstructorMenu> {
@@ -26,9 +28,12 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     private static final int MUTED = 0xFF8EA9B2;
     private static final int DARK = 0xFF050A0E;
 
+    private Button startButton;
+
     public ConstructorScreen(ConstructorMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 272, 184);
+        super(menu, inventory, title, 272, 258);
         this.titleLabelY = 7;
+        this.inventoryLabelY = 164;
     }
 
     @Override
@@ -37,10 +42,23 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         int x = leftPos;
         int y = topPos;
 
+        startButton = addRenderableWidget(Button.builder(Component.literal("START"), b -> sendButton(2))
+                .bounds(x + 12, y + 146, 76, 20).build());
         addRenderableWidget(Button.builder(Component.literal("PAUSE / RESUME"), b -> sendButton(0))
-                .bounds(x + 12, y + 150, 116, 20).build());
+                .bounds(x + 98, y + 146, 86, 20).build());
         addRenderableWidget(Button.builder(Component.literal("CLEAR"), b -> sendButton(1))
-                .bounds(x + 144, y + 150, 116, 20).build());
+                .bounds(x + 194, y + 146, 66, 20).build());
+    }
+
+    @Override
+    protected void containerTick() {
+        super.containerTick();
+        if (startButton != null) {
+            ConstructorStatus s = status(menu.data().get(2));
+            boolean hasCard = menu.data().get(8) != 0;
+            boolean busy = s == ConstructorStatus.AIMING || s == ConstructorStatus.CHARGING || s == ConstructorStatus.FIRING || menu.data().get(6) != 0;
+            startButton.active = hasCard && !busy;
+        }
     }
 
     private void sendButton(int id) {
@@ -65,13 +83,16 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         gui.centeredText(font, Component.literal("CONSTRUCTOR CONTROL"), x + imageWidth / 2, y + 8, CYAN);
         gui.fill(x + 8, y + 22, x + imageWidth - 8, y + 23, BORDER);
 
-        panel(gui, x + 10, y + 30, x + 86, y + 140);
-        panel(gui, x + 90, y + 30, x + 190, y + 140);
-        panel(gui, x + 194, y + 30, x + 262, y + 140);
+        panel(gui, x + 10, y + 30, x + 86, y + 138);
+        panel(gui, x + 90, y + 30, x + 190, y + 138);
+        panel(gui, x + 194, y + 30, x + 262, y + 138);
 
         drawEnergy(gui, x, y);
         drawJob(gui, x, y);
         drawTarget(gui, x, y);
+
+        gui.fill(x + 8, y + 172, x + imageWidth - 8, y + 173, BORDER);
+        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 166, MUTED);
     }
 
     private void drawEnergy(GuiGraphicsExtractor gui, int x, int y) {
@@ -84,7 +105,7 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         int bx1 = x + 22;
         int by1 = y + 52;
         int bx2 = x + 42;
-        int by2 = y + 126;
+        int by2 = y + 118;
         gui.fill(bx1, by1, bx2, by2, DARK);
         gui.fill(bx1 + 1, by1 + 1, bx2 - 1, by2 - 1, 0xFF0A2630);
 
@@ -92,8 +113,8 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         int fill = (int) ((long) innerHeight * energy / capacity);
         gui.fill(bx1 + 1, by2 - 1 - fill, bx2 - 1, by2 - 1, CYAN);
 
-        gui.text(font, Component.literal(formatFe(energy)), x + 47, y + 62, TEXT);
-        gui.text(font, Component.literal("/ " + formatFe(capacity)), x + 47, y + 74, MUTED);
+        gui.text(font, Component.literal(formatFe(energy)), x + 47, y + 58, TEXT);
+        gui.text(font, Component.literal("/ " + formatFe(capacity)), x + 47, y + 70, MUTED);
         gui.text(font, Component.literal("STATUS"), x + 16, y + 112, MUTED);
         gui.text(font, Component.literal(statusText(status)), x + 16, y + 124, statusColor(status));
     }
@@ -107,12 +128,12 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         gui.text(font, Component.literal("SCHEMATIC / JOB"), x + 96, y + 36, MUTED);
 
         int shown = total <= 0 ? 0 : Math.min(total, index + 1);
-        gui.text(font, Component.literal("Block " + shown + " / " + total), x + 96, y + 52, TEXT);
+        gui.text(font, Component.literal("Block " + shown + " / " + total), x + 96, y + 50, TEXT);
 
         int px1 = x + 96;
-        int py1 = y + 68;
+        int py1 = y + 64;
         int px2 = x + 184;
-        int py2 = y + 78;
+        int py2 = y + 73;
         gui.fill(px1, py1, px2, py2, DARK);
         gui.fill(px1 + 1, py1 + 1, px2 - 1, py2 - 1, 0xFF0A2630);
         int progressWidth = total <= 0 ? 0 : (int) ((long) (px2 - px1 - 2) * Math.min(total, index) / total);
@@ -120,13 +141,15 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         gui.fill(px1 + 1, py1 + 1, px1 + 1 + progressWidth, py2 - 1, CYAN);
 
         BlockState target = targetState();
-        gui.text(font, Component.literal("CURRENT BLOCK"), x + 96, y + 88, MUTED);
-        gui.text(font, Component.literal(target == null ? "-" : shortId(target)), x + 96, y + 100, TEXT);
+        gui.text(font, Component.literal("CURRENT BLOCK"), x + 96, y + 80, MUTED);
+        gui.text(font, Component.literal(target == null ? "-" : shortId(target)), x + 96, y + 92, TEXT);
 
-        gui.text(font, Component.literal("SHOT"), x + 96, y + 116, MUTED);
-        int shotPct = Math.min(100, shot * 100 / Math.max(1, ConstructorBlockEntity.FLIGHT_TICKS));
-        gui.text(font, Component.literal((running ? "ACTIVE  " : "HALTED  ") + shotPct + "%"), x + 96, y + 128,
-                running ? GREEN : ORANGE);
+        gui.text(font, Component.literal("CARD"), x + 96, y + 106, MUTED);
+        gui.fill(x + 108, y + 112, x + 136, y + 140, DARK);
+        String cardName = cardName();
+        gui.text(font, Component.literal(trim(cardName, 8)), x + 140, y + 118, TEXT);
+        gui.text(font, Component.literal((running ? "ACTIVE" : "IDLE") + "  " + Math.min(100, shot * 100 / Math.max(1, ConstructorBlockEntity.FLIGHT_TICKS)) + "%"),
+                x + 140, y + 130, running ? GREEN : ORANGE);
     }
 
     private void drawTarget(GuiGraphicsExtractor gui, int x, int y) {
@@ -142,8 +165,8 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
             gui.text(font, Component.literal("Z " + target.getZ()), x + 200, y + 76, TEXT);
         }
 
-        gui.text(font, Component.literal("COST / SHOT"), x + 200, y + 96, MUTED);
-        gui.text(font, Component.literal(formatFe(cost)), x + 200, y + 108, CYAN);
+        gui.text(font, Component.literal("COST / SHOT"), x + 200, y + 94, MUTED);
+        gui.text(font, Component.literal(formatFe(cost)), x + 200, y + 106, CYAN);
 
         ConstructorStatus s = status(menu.data().get(2));
         if (s == ConstructorStatus.WAITING_MATERIAL) {
@@ -152,7 +175,16 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
             gui.text(font, Component.literal("LOW FE"), x + 200, y + 122, ORANGE);
         } else if (s == ConstructorStatus.BLOCKED) {
             gui.text(font, Component.literal("BLOCKED"), x + 200, y + 122, RED);
+        } else if (s == ConstructorStatus.ERROR) {
+            gui.text(font, Component.literal("SCHEMATIC ERROR"), x + 200, y + 122, RED);
         }
+    }
+
+    private String cardName() {
+        if (menu.constructor() == null) return "No card";
+        ItemStack card = menu.constructor().schematicCard();
+        if (!(card.getItem() instanceof SchematicCardItem)) return "No card";
+        return SchematicCardItem.sourceName(card);
     }
 
     private BlockState targetState() {
@@ -206,6 +238,11 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         if (value >= 1_000_000) return String.format("%.2f MFE", value / 1_000_000.0);
         if (value >= 1_000) return String.format("%.1f kFE", value / 1_000.0);
         return value + " FE";
+    }
+
+    private static String trim(String value, int max) {
+        if (value == null) return "";
+        return value.length() <= max ? value : value.substring(0, Math.max(1, max - 1)) + "…";
     }
 
     @Override

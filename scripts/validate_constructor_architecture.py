@@ -62,7 +62,8 @@ def main() -> int:
     # Save/reload and payment semantics are hard invariants: a reserved shot may
     # resume, but must not reserve FE/material twice.
     require(block_entity, 'output.putBoolean("ShotReserved", shotReserved)', "reserved-shot persistence")
-    require(block_entity, 'output.store("ActiveJob"', "construction cursor persistence")
+    require(block_entity, 'output.store("ConstructionJob"', "construction cursor persistence")
+    require(block_entity, 'input.read("ConstructionJob"', "construction cursor reload")
     require(block_entity, "pendingJobData", "reload reconstruction cursor")
     require(job, 'tag.put("Primary"', "primary queue persistence")
     require(job, 'tag.put("Deferred"', "deferred queue persistence")

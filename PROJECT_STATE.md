@@ -33,20 +33,18 @@ Before changing Quantum Tools in any conversation:
 - Projectile renders the full target BlockState model/texture.
 - Neutral `ConstructionPlan` execution layer, independent of schematic source.
 - Block substitution is required (example cobblestone -> smooth stone).
-- Planned real schematic adapters include Create and `.schem`; those readers are not complete yet.
+- Planned adapters include Create `.nbt` and other schematic formats such as `.schem` where technically practical.
 
 ### Constructor visual correction after dev.3 runtime test
 
 The dev.3 runtime model was rejected because the barrel rotated around a pivot only about half a block above the floor. The current branch raises the pivot/trunnion and aligns turret, barrel and cyan energy channel with the approved cannon silhouette. Preserve this raised configuration.
 
-### Constructor UI + animation — dev.5
+### Constructor UI + animation — dev.5+
 
-Implemented and CI-validated after the dev.4 runtime test build:
-
-- right-click now opens a dedicated Constructor control UI; the old temporary cobblestone click trigger is removed;
+- right-click opens a dedicated Constructor control UI;
 - UI shows FE stored/capacity, machine status, schematic/job progress, current target block, target XYZ, current FE cost per shot and firing progress;
-- UI exposes `PAUSE / RESUME` and safe `CLEAR` controls;
-- CLEAR refuses while a shot already has FE + material reserved, preventing silent resource deletion;
+- UI exposes `START`, `PAUSE / RESUME` and safe `CLEAR` controls;
+- CLEAR refuses while a shot already has FE + material reserved;
 - turret yaw and barrel pitch interpolate smoothly toward the exact target;
 - subtle standby motion only when idle/complete/paused;
 - cyan energy channel remains visible and pulses during charging, firing and low-energy wait states;
@@ -54,29 +52,44 @@ Implemented and CI-validated after the dev.4 runtime test build:
 - projectile remains the full target BlockState model/texture, materializes from smaller scale, follows an arc, and rotates in flight;
 - authoritative block placement remains server-side and happens only when the projectile reaches the target.
 
-## Schematic Table — approved concept and dev.4 implementation
+## Schematic Table — approved workflow, corrected in dev.6
 
-Approved visual direction:
+Approved visual direction remains:
 
-- It must read clearly as a **real workbench/table**, not a cubic machine.
-- Wide white/light metallic tabletop frame, dark structural legs/frame, cyan holographic/touch surface and front control module.
-- Small orange technical/warning accents.
-- Same product-family language as the Constructor and Miner.
+- real workbench/table silhouette, not a cubic machine;
+- white/light metallic tabletop frame, dark structural legs/frame, cyan holographic/touch surface and small orange accents;
+- same product-family language as Constructor and Miner.
 
-Implemented in **3.0.6-dev.4**:
+The dev.4 interaction design is **rejected/superseded**. Do not restore the old FROM/TO slots, rotation/mirror/offset controls, PREVIEW/SEND buttons or fixed 5x3 test wall to this table.
 
-- registered block + BlockItem + Block Entity + Menu + client Screen;
-- dedicated `rftoolsbuilder:schematic_table` item/block;
-- dedicated `rftoolsbuilder:schematic_card` item;
-- card slot plus FROM/TO block-sample slots for substitution mapping;
-- card-persisted rotation (0/90/180/270), mirror (off/X/Z) and X/Y/Z offsets (-64..64);
-- up to 8 exact block replacement mappings stored on the Schematic Card;
-- UI buttons for rotation, mirror, offset, preview/test, save mapping, clear mappings and send;
-- nearest Constructor lookup within 16 horizontal blocks / 5 vertical blocks;
-- SEND converts the current test schematic into the existing `ConstructionPlan` engine and applies the card's transformations/replacements before starting the Constructor;
-- current PREVIEW/SEND source is intentionally a deterministic 5x3 test wall (cobblestone border + stone center) so energy, materials, aiming, placement, transformations and substitution can be runtime-tested before real Create/`.schem` readers are attached.
+Current dev.6 workflow intentionally follows the Create-style schematic-writing concept:
 
-Important: real Create schematic or `.schem` file loading is not yet implemented. The table/card/execution pipeline is testable first; format readers are the next integration layer.
+- the table has **one Schematic Card slot only** (plus the standard player inventory area);
+- it scans the Minecraft instance `schematics/` directory and lists available `.nbt` schematic files;
+- the list has selection, scrolling, refresh and `WRITE TO CARD`;
+- writing stores the selected schematic filename and source type on the Schematic Card;
+- rewriting a card resets stale dev.4 rotation/mirror/offset values to zero;
+- block substitution data remains supported by the card/plan layer but is no longer edited on the Schematic Table;
+- there is no synthetic test-wall SEND path in the normal workflow anymore.
+
+## Schematic Card + Constructor — dev.6 real file flow
+
+- `rftoolsbuilder:schematic_card` can now represent an actual schematic file reference instead of only test/config data;
+- tooltip distinguishes an empty card from a card written with a schematic;
+- Constructor now has its own Schematic Card slot;
+- `START` reads the inserted card and loads the referenced schematic;
+- the Create/vanilla structure-NBT adapter reads the `.nbt` palette and block list, reconstructs BlockStates/properties and normalizes them into `ConstructionPlan` entries;
+- air entries are skipped;
+- the existing Constructor engine then handles materials, FE, aiming, projectile animation and authoritative placement;
+- the inserted card is persisted with the Constructor and is dropped if the machine is broken in survival.
+
+### Current schematic-format limitations
+
+- dev.6 currently implements the Create/vanilla **compressed `.nbt` structure format** from the local `schematics/` folder;
+- `.schem`/Sponge-style files are not implemented yet;
+- Block Entity NBT payload restoration is not implemented yet; dev.6 reconstructs BlockStates/properties;
+- local/singleplayer/integrated-server flow is the current runtime test target;
+- Create-style client-to-dedicated-server schematic upload/synchronization is **not implemented yet**. Do not claim dedicated-server parity until a payload/upload layer is added and tested.
 
 ## Miner — approved Concept 1 visual
 
@@ -105,22 +118,22 @@ All existing card textures plus the Schematic Card use the approved family:
 - function-specific accent colors/icons;
 - redesigned files: Shape Card, Quarry, Clear Quarry, Fortune, Clear Fortune, Silk, Clear Silk and Schematic Card.
 
-## Current development checkpoint — 3.0.6-dev.5
+## Current development checkpoint — 3.0.6-dev.6
 
 Development branch: `agent/constructor-foundation`
 Draft PR: #1
 
-Constructor UI/animation commit validated by GitHub Actions (Java 25 / NeoForge 26.1.2.95):
+Create-style schematic workflow code commit validated by GitHub Actions (Java 25 / NeoForge 26.1.2.95):
 
-`9166888d086a41e8e16b69f6f52a26a188a4e13c`
+`478cac278de41377327b25aa78417dd16fd5f9e2`
 
 Validated merged development JAR SHA-256:
 
-`5093e8d35d56d0f224c627aa520b6a479f1d92f58e531d146a293d0d1541e9a2`
+`17f4157172fbd17082e145d0a671efd8a861bd04dbd648b3a380a1584b16176f`
 
-JAR build label: **3.0.6-dev.5**
+JAR build label: **3.0.6-dev.6**
 
-The dev.5 JAR is built by overlaying the CI-validated patch over dev.4, preserving the verified 3.0.5 lineage, existing Miner/table/cards, translations and `quantumtools.mixins.json`.
+The dev.6 JAR is built by overlaying the CI-validated patch over dev.5, preserving the verified 3.0.5 lineage, Constructor animation/UI, Miner, card redesign, translations and `quantumtools.mixins.json`.
 
 ## Binary baseline storage note
 

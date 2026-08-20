@@ -74,13 +74,10 @@ public final class ConstructorBootstrap {
     public static final DeferredHolder<MenuType<?>, MenuType<SchematicTableMenu>> SCHEMATIC_TABLE_MENU =
             MENUS.register("schematic_table", () -> IMenuTypeExtension.create(SchematicTableMenu::new));
 
-    private ConstructorBootstrap() {
-    }
+    private ConstructorBootstrap() {}
 
     public static synchronized void init(IEventBus modBus) {
-        if (initialized) {
-            return;
-        }
+        if (initialized) return;
         initialized = true;
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
@@ -88,6 +85,7 @@ public final class ConstructorBootstrap {
         MENUS.register(modBus);
         modBus.addListener(ConstructorBootstrap::registerCapabilities);
         modBus.addListener(ConstructorBootstrap::addCreativeTabContents);
+        modBus.addListener(ConstructorNetworking::registerPayloads);
     }
 
     private static void registerCapabilities(RegisterCapabilitiesEvent event) {

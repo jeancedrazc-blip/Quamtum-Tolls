@@ -1,0 +1,3 @@
+mcjty/rftoolsbuilder/constructor/client/ConstructorClient.class
+mcjty/rftoolsbuilder/constructor/client/SchematicPlacementHandler.class
+mcjty/rftoolsbuilder/constructor/client/SchematicPlacementScreen.class

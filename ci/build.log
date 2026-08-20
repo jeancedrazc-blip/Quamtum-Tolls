@@ -41,10 +41,10 @@ Note: Recompile with -Xlint:deprecation for details.
 > Task :testJunit NO-SOURCE
 > Task :check UP-TO-DATE
 > Task :build
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1787213333947.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1787219955039.json
 
 [Incubating] Problems report is available at: file:///home/runner/work/Quamtum-Tolls/Quamtum-Tolls/build/reports/problems/problems-report.html
 
-BUILD SUCCESSFUL in 1m 38s
+BUILD SUCCESSFUL in 1m 41s
 13 actionable tasks: 13 executed
 Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.2.1/userguide/configuration_cache_enabling.html

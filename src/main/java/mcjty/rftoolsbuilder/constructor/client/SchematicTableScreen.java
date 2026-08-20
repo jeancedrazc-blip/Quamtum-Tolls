@@ -4,26 +4,28 @@ import mcjty.rftoolsbuilder.constructor.SchematicCardItem;
 import mcjty.rftoolsbuilder.constructor.SchematicFolderIndex;
 import mcjty.rftoolsbuilder.constructor.SchematicTableBlockEntity;
 import mcjty.rftoolsbuilder.constructor.SchematicTableMenu;
-import net.minecraft.client.Minecraft;
+import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 public final class SchematicTableScreen extends AbstractContainerScreen<SchematicTableMenu> {
-    private static final int BG = 0xFF071018;
-    private static final int PANEL = 0xFF0D1B26;
-    private static final int PANEL_2 = 0xFF122735;
-    private static final int BORDER = 0xFF1F5366;
-    private static final int CYAN = 0xFF1CD6F2;
+    private static final int BG = 0xFF050B11;
+    private static final int PANEL = 0xFF0B1720;
+    private static final int PANEL_2 = 0xFF0F212D;
+    private static final int BORDER = 0xFF24576A;
+    private static final int CYAN = 0xFF20D9F3;
     private static final int ORANGE = 0xFFF18432;
-    private static final int GREEN = 0xFF67E39A;
-    private static final int TEXT = 0xFFE7F7FA;
-    private static final int MUTED = 0xFF8EA9B2;
-    private static final int DARK = 0xFF050A0E;
+    private static final int GREEN = 0xFF69E6A0;
+    private static final int TEXT = 0xFFE8F5F7;
+    private static final int MUTED = 0xFF8CA6AE;
+    private static final int DARK = 0xFF03070A;
     private static final int ROWS = 5;
 
     private final Button[] rowButtons = new Button[ROWS];
@@ -33,10 +35,12 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
     private Button confirmButton;
     private Button upButton;
     private Button downButton;
+    private Button folderButton;
+    private Button refreshButton;
 
     public SchematicTableScreen(SchematicTableMenu menu, Inventory inventory, Component title) {
-        super(menu, inventory, title, 272, 220);
-        this.inventoryLabelY = 128;
+        super(menu, inventory, title, 272, 224);
+        this.inventoryLabelY = 136;
         this.titleLabelY = 7;
     }
 
@@ -49,23 +53,30 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
         for (int i = 0; i < ROWS; i++) {
             final int row = i;
             rowButtons[i] = addRenderableWidget(Button.builder(Component.empty(), b -> selectRow(row))
-                    .bounds(x + 66, y + 38 + i * 18, 174, 16).build());
+                    .bounds(x + 64, y + 39 + i * 17, 160, 15).build());
         }
 
         upButton = addRenderableWidget(Button.builder(Component.literal("▲"), b -> scroll(-1))
-                .bounds(x + 244, y + 38, 18, 16).build());
+                .bounds(x + 228, y + 39, 16, 15).build());
         downButton = addRenderableWidget(Button.builder(Component.literal("▼"), b -> scroll(1))
-                .bounds(x + 244, y + 110, 18, 16).build());
-
-        addRenderableWidget(Button.builder(Component.literal("REFRESH"), b -> {
-            refreshSchematics();
-            sendButton(SchematicTableBlockEntity.BUTTON_REFRESH);
-        }).bounds(x + 66, y + 112, 82, 18).build());
-
-        confirmButton = addRenderableWidget(Button.builder(Component.literal("WRITE TO CARD"), b -> writeSelected())
-                .bounds(x + 154, y + 112, 86, 18).build());
+                .bounds(x + 228, y + 107, 16, 15).build());
+        folderButton = addRenderableWidget(Button.builder(Component.literal("DIR"), b -> openFolder())
+                .bounds(x + 64, y + 125, 38, 17).build());
+        refreshButton = addRenderableWidget(Button.builder(Component.literal("↻"), b -> refreshSchematics())
+                .bounds(x + 106, y + 125, 28, 17).build());
+        confirmButton = addRenderableWidget(Button.builder(Component.literal("WRITE"), b -> writeSelected())
+                .bounds(x + 138, y + 125, 86, 17).build());
 
         refreshSchematics();
+    }
+
+    private void openFolder() {
+        try {
+            Path folder = Path.of("schematics").toAbsolutePath().normalize();
+            Files.createDirectories(folder);
+            Util.getPlatform().openFile(folder.toFile());
+        } catch (Exception ignored) {
+        }
     }
 
     private void refreshSchematics() {
@@ -82,6 +93,7 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
     }
 
     private void selectRow(int row) {
+        if (menu.status() == SchematicTableBlockEntity.STATUS_UPLOADING) return;
         int index = firstVisible + row;
         if (index < 0 || index >= schematics.size()) return;
         selectedIndex = index;
@@ -100,13 +112,14 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
     }
 
     private void updateRows() {
+        boolean busy = menu.status() == SchematicTableBlockEntity.STATUS_UPLOADING;
         for (int row = 0; row < ROWS; row++) {
             Button button = rowButtons[row];
             if (button == null) continue;
             int index = firstVisible + row;
             boolean exists = index >= 0 && index < schematics.size();
             button.visible = exists;
-            button.active = exists;
+            button.active = exists && !busy;
             if (exists) {
                 SchematicFolderIndex.Entry entry = schematics.get(index);
                 String marker = switch (entry.format()) {
@@ -116,22 +129,22 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
                     case LEGACY_SCHEMATIC -> "OLD";
                 };
                 String name = "[" + marker + "] " + entry.fileName();
-                button.setMessage(Component.literal((index == selectedIndex ? "▶ " : "  ") + trim(name, 25)));
+                button.setMessage(Component.literal((index == selectedIndex ? "▶ " : "  ") + trim(name, 22)));
             }
         }
-        if (confirmButton != null) confirmButton.active = selectedIndex >= 0 && menu.data().get(0) != SchematicTableBlockEntity.STATUS_NO_CARD;
-        if (upButton != null) upButton.active = firstVisible > 0;
-        if (downButton != null) downButton.active = firstVisible + ROWS < schematics.size();
+
+        boolean inputPresent = menu.table() != null && menu.table().inputCard().getItem() instanceof SchematicCardItem;
+        if (confirmButton != null) confirmButton.active = selectedIndex >= 0 && inputPresent && !menu.hasOutput() && !busy;
+        if (upButton != null) upButton.active = !busy && firstVisible > 0;
+        if (downButton != null) downButton.active = !busy && firstVisible + ROWS < schematics.size();
+        if (folderButton != null) folderButton.active = !busy;
+        if (refreshButton != null) refreshButton.active = !busy;
     }
 
     private void writeSelected() {
         if (selectedIndex < 0 || selectedIndex >= schematics.size()) return;
-        sendButton(SchematicTableBlockEntity.BUTTON_SELECT_BASE + selectedIndex);
-    }
-
-    private void sendButton(int id) {
-        Minecraft mc = this.minecraft;
-        if (mc != null && mc.gameMode != null) mc.gameMode.handleInventoryButtonClick(menu.containerId, id);
+        if (menu.status() == SchematicTableBlockEntity.STATUS_UPLOADING || menu.hasOutput()) return;
+        ClientSchematicUploader.upload(menu.blockPos(), schematics.get(selectedIndex));
     }
 
     private static void panel(GuiGraphicsExtractor gui, int x1, int y1, int x2, int y2) {
@@ -148,46 +161,53 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
         gui.centeredText(font, Component.literal("SCHEMATIC TABLE"), x + imageWidth / 2, y + 8, CYAN);
         gui.fill(x + 8, y + 22, x + imageWidth - 8, y + 23, BORDER);
 
-        panel(gui, x + 10, y + 30, x + 58, y + 132);
-        panel(gui, x + 62, y + 30, x + 264, y + 132);
+        panel(gui, x + 9, y + 30, x + 57, y + 143);
+        panel(gui, x + 61, y + 30, x + 247, y + 143);
+        panel(gui, x + 251, y + 30, x + 263, y + 143);
 
-        gui.text(font, Component.literal("CARD"), x + 18, y + 36, MUTED);
-        gui.fill(x + 19, y + 43, x + 47, y + 71, DARK);
-        gui.fill(x + 20, y + 44, x + 46, y + 70, CYAN);
-        gui.fill(x + 22, y + 46, x + 44, y + 68, 0xFF08141C);
+        gui.text(font, Component.literal("INPUT"), x + 17, y + 36, MUTED);
+        gui.text(font, Component.literal("FILES"), x + 65, y + 34, MUTED);
+        gui.text(font, Component.literal("OUT"), x + 249, y + 36, MUTED);
 
-        String cardName = menu.table() == null || menu.table().card().isEmpty()
-                ? "Insert card"
-                : SchematicCardItem.sourceName(menu.table().card());
-        gui.text(font, Component.literal(trim(cardName, 8)), x + 16, y + 80, TEXT);
-
-        gui.text(font, Component.literal("SCHEMATICS /schematics"), x + 68, y + 34, MUTED);
         if (schematics.isEmpty()) {
-            gui.text(font, Component.literal("No supported schematic files"), x + 72, y + 58, ORANGE);
-            gui.text(font, Component.literal("NBT / SCHEM / LITEMATIC / SCHEMATIC"), x + 72, y + 70, MUTED);
+            gui.text(font, Component.literal("No supported schematic files"), x + 69, y + 61, ORANGE);
+            gui.text(font, Component.literal(".nbt  .schem  .litematic  .schematic"), x + 69, y + 74, MUTED);
         }
 
-        int status = menu.data().get(0);
-        gui.text(font, Component.literal(statusText(status)), x + 68, y + 132, statusColor(status));
+        int status = menu.status();
+        String statusText = statusText(status);
+        gui.text(font, Component.literal(statusText), x + 14, y + 151, statusColor(status));
 
-        gui.fill(x + 8, y + 138, x + imageWidth - 8, y + 139, BORDER);
-        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 142, MUTED);
+        if (status == SchematicTableBlockEntity.STATUS_UPLOADING) {
+            int barX1 = x + 64;
+            int barX2 = x + 224;
+            int barY1 = y + 126;
+            int barY2 = y + 140;
+            gui.fill(barX1, barY1, barX2, barY2, DARK);
+            int width = (barX2 - barX1 - 2) * Math.max(0, Math.min(10_000, menu.progress())) / 10_000;
+            gui.fill(barX1 + 1, barY1 + 1, barX1 + 1 + width, barY2 - 1, CYAN);
+            gui.centeredText(font, Component.literal((menu.progress() / 100) + "%"), (barX1 + barX2) / 2, barY1 + 3, TEXT);
+        }
+
+        gui.fill(x + 8, y + 164, x + imageWidth - 8, y + 165, BORDER);
+        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 55, y + 168, MUTED);
     }
 
     private static String statusText(int status) {
         return switch (status) {
-            case SchematicTableBlockEntity.STATUS_READY -> "Choose a schematic and write it to the card";
-            case SchematicTableBlockEntity.STATUS_WRITTEN -> "Schematic written to card";
-            case SchematicTableBlockEntity.STATUS_NO_SCHEMATICS -> "No supported schematics found";
-            case SchematicTableBlockEntity.STATUS_INVALID_SELECTION -> "Invalid schematic selection";
-            default -> "Insert a Schematic Card";
+            case SchematicTableBlockEntity.STATUS_READY -> "Select a local schematic and write it to the input card";
+            case SchematicTableBlockEntity.STATUS_UPLOADING -> "Uploading and validating schematic…";
+            case SchematicTableBlockEntity.STATUS_FINISHED -> "Finished — take the written card from OUTPUT";
+            case SchematicTableBlockEntity.STATUS_ERROR -> "Upload rejected — input card restored";
+            default -> "Insert a Schematic Card in INPUT";
         };
     }
 
     private static int statusColor(int status) {
         return switch (status) {
-            case SchematicTableBlockEntity.STATUS_WRITTEN -> GREEN;
-            case SchematicTableBlockEntity.STATUS_NO_SCHEMATICS, SchematicTableBlockEntity.STATUS_INVALID_SELECTION -> ORANGE;
+            case SchematicTableBlockEntity.STATUS_FINISHED -> GREEN;
+            case SchematicTableBlockEntity.STATUS_ERROR -> ORANGE;
+            case SchematicTableBlockEntity.STATUS_UPLOADING -> CYAN;
             default -> TEXT;
         };
     }

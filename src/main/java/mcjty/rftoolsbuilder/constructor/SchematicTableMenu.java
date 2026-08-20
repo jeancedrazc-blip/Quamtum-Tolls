@@ -7,7 +7,6 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 
 public final class SchematicTableMenu extends AbstractContainerMenu {
@@ -17,7 +16,7 @@ public final class SchematicTableMenu extends AbstractContainerMenu {
     public SchematicTableMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
                 inventory.player.level().getBlockEntity(buffer.readBlockPos()) instanceof SchematicTableBlockEntity found ? found : null,
-                new SimpleContainerData(7));
+                new SimpleContainerData(2));
     }
 
     public SchematicTableMenu(int id, Inventory inventory, SchematicTableBlockEntity table, ContainerData data) {
@@ -26,16 +25,8 @@ public final class SchematicTableMenu extends AbstractContainerMenu {
         this.data = data;
 
         if (table != null) {
-            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_CARD, 24, 44) {
+            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_CARD, 24, 48) {
                 @Override public boolean mayPlace(ItemStack stack) { return stack.getItem() instanceof SchematicCardItem; }
-                @Override public int getMaxStackSize() { return 1; }
-            });
-            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_FROM, 88, 44) {
-                @Override public boolean mayPlace(ItemStack stack) { return stack.getItem() instanceof BlockItem; }
-                @Override public int getMaxStackSize() { return 1; }
-            });
-            addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_TO, 112, 44) {
-                @Override public boolean mayPlace(ItemStack stack) { return stack.getItem() instanceof BlockItem; }
                 @Override public int getMaxStackSize() { return 1; }
             });
         }
@@ -68,14 +59,12 @@ public final class SchematicTableMenu extends AbstractContainerMenu {
         if (!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack source = slot.getItem();
         ItemStack copy = source.copy();
-        int machineSlots = table == null ? 0 : 3;
+        int machineSlots = table == null ? 0 : 1;
 
         if (index < machineSlots) {
             if (!moveItemStackTo(source, machineSlots, slots.size(), true)) return ItemStack.EMPTY;
         } else if (source.getItem() instanceof SchematicCardItem) {
             if (!moveItemStackTo(source, 0, 1, false)) return ItemStack.EMPTY;
-        } else if (source.getItem() instanceof BlockItem) {
-            if (!moveItemStackTo(source, 1, 3, false)) return ItemStack.EMPTY;
         } else {
             return ItemStack.EMPTY;
         }

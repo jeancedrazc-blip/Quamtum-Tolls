@@ -16,6 +16,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      - name: Validate approved assets and references
+        run: python3 scripts/validate_assets.py
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.2.1'

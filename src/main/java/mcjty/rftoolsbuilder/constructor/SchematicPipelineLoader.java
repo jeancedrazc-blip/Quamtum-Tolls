@@ -54,7 +54,7 @@ public final class SchematicPipelineLoader {
         CompoundTag root = readCompressed(entry.fileName());
         Geometry geometry = readGeometry(entry.format(), root, includeAir);
         ConstructionPlan sparseBlocks = SchematicPlanLoader.load(entry, includeAir);
-        List<ConstructionEntityEntry> entities = loadEntities(entry.format(), root);
+        List<ConstructionEntityEntry> entities = loadEntities(entry.format(), root, geometry);
 
         // SchematicPlanLoader historically normalized its sparse block list to
         // the first populated block. Restore those coordinates before applying
@@ -69,8 +69,7 @@ public final class SchematicPipelineLoader {
             restoredBlocks.add(new ConstructionEntry(p, entryBlock.sourceState(), entryBlock.blockEntityDataCopy()));
         }
 
-        // Entities have already been normalized into declared schematic space,
-        // so both lists now share a zero-based source cuboid.
+        // Entities are normalized into the same zero-based declared cuboid.
         return new ConstructionPlan(restoredBlocks, entities, BlockPos.ZERO,
                 geometry.sizeX(), geometry.sizeY(), geometry.sizeZ());
     }
@@ -125,21 +124,31 @@ public final class SchematicPipelineLoader {
             palette = root.getListOrEmpty("palette");
         }
 
+        BlockPos declaredMin = BlockPos.ZERO;
         ListTag size = root.getListOrEmpty("size");
         int sx = size.size() >= 3 ? size.getInt(0).orElse(0) : 0;
         int sy = size.size() >= 3 ? size.getInt(1).orElse(0) : 0;
         int sz = size.size() >= 3 ? size.getInt(2).orElse(0) : 0;
         if (sx <= 0 || sy <= 0 || sz <= 0) {
-            // Older/wrapped structure exporters occasionally omit size. Fall
-            // back to the explicit block coordinates instead of inventing it.
+            // Older/wrapped exporters occasionally omit size. In that case the
+            // explicit block bounds become the declared cuboid, including a
+            // non-zero source minimum if the exporter used one.
             int[] bounds = blockListBounds(root.getListOrEmpty("blocks"), null);
             if (bounds == null) throw new IOException("Structure has no declared or populated bounds");
+            declaredMin = new BlockPos(bounds[0], bounds[1], bounds[2]);
             sx = bounds[3] - bounds[0] + 1;
             sy = bounds[4] - bounds[1] + 1;
             sz = bounds[5] - bounds[2] + 1;
         }
 
-        if (includeAir) return new Geometry(BlockPos.ZERO, sx, sy, sz, BlockPos.ZERO);
+        if (includeAir) {
+            // A structure NBT may still be sparse even when the caller wants
+            // AIR targets. Restore from the minimum actually present in the
+            // block list instead of assuming the file serialized AIR entries.
+            int[] present = blockListBounds(root.getListOrEmpty("blocks"), null);
+            BlockPos min = present == null ? declaredMin : new BlockPos(present[0], present[1], present[2]);
+            return new Geometry(declaredMin, sx, sy, sz, min);
+        }
 
         Set<Integer> airStates = new HashSet<>();
         for (int i = 0; i < palette.size(); i++) {
@@ -147,8 +156,8 @@ public final class SchematicPipelineLoader {
             if (isAirName(state.getString("Name").orElse("minecraft:air"))) airStates.add(i);
         }
         int[] populated = blockListBounds(root.getListOrEmpty("blocks"), airStates);
-        BlockPos min = populated == null ? BlockPos.ZERO : new BlockPos(populated[0], populated[1], populated[2]);
-        return new Geometry(BlockPos.ZERO, sx, sy, sz, min);
+        BlockPos min = populated == null ? declaredMin : new BlockPos(populated[0], populated[1], populated[2]);
+        return new Geometry(declaredMin, sx, sy, sz, min);
     }
 
     private static int[] blockListBounds(ListTag blocks, Set<Integer> ignoredStates) {
@@ -305,26 +314,37 @@ public final class SchematicPipelineLoader {
     // Entities
     // ---------------------------------------------------------------------
 
-    private static List<ConstructionEntityEntry> loadEntities(SchematicFolderIndex.Format format, CompoundTag root) {
+    private static List<ConstructionEntityEntry> loadEntities(SchematicFolderIndex.Format format, CompoundTag root, Geometry geometry) {
         return switch (format) {
-            case VANILLA_NBT -> readVanillaEntities(root);
+            case VANILLA_NBT -> readVanillaEntities(root, geometry.declaredMin());
             case SPONGE_SCHEM -> readSpongeEntities(root);
-            case LITEMATICA -> readLitematicEntities(root);
+            case LITEMATICA -> readLitematicEntities(root, geometry.declaredMin());
             case LEGACY_SCHEMATIC -> readLegacyEntities(root);
         };
     }
 
-    private static List<ConstructionEntityEntry> readVanillaEntities(CompoundTag root) {
-        ArrayList<ConstructionEntityEntry> result = new ArrayList<>();
+    private static List<ConstructionEntityEntry> readVanillaEntities(CompoundTag originalRoot, BlockPos declaredMin) {
+        CompoundTag root = originalRoot;
         ListTag entities = root.getListOrEmpty("entities");
+        if (entities.isEmpty()) {
+            CompoundTag nested = root.getCompoundOrEmpty("Schematic");
+            if (!nested.isEmpty()) {
+                root = nested;
+                entities = root.getListOrEmpty("entities");
+            }
+        }
+
+        Vec3 sourceMin = new Vec3(declaredMin.getX(), declaredMin.getY(), declaredMin.getZ());
+        ArrayList<ConstructionEntityEntry> result = new ArrayList<>();
         for (int i = 0; i < entities.size(); i++) {
             if (!(entities.get(i) instanceof CompoundTag wrapper)) continue;
-            Vec3 pos = readVec(wrapper.getListOrEmpty("pos"));
-            if (pos == null) continue;
+            Vec3 stored = readVec(wrapper.getListOrEmpty("pos"));
+            if (stored == null) continue;
+            Vec3 relative = stored.subtract(sourceMin);
             CompoundTag data = wrapper.getCompoundOrEmpty("nbt").copy();
             if (data.isEmpty()) continue;
-            normalizeEntityPayload(data, pos);
-            result.add(new ConstructionEntityEntry(pos, data));
+            normalizeEntityPayload(data, relative);
+            result.add(new ConstructionEntityEntry(relative, data));
         }
         return result;
     }
@@ -365,9 +385,10 @@ public final class SchematicPipelineLoader {
         return result;
     }
 
-    private static List<ConstructionEntityEntry> readLitematicEntities(CompoundTag root) {
+    private static List<ConstructionEntityEntry> readLitematicEntities(CompoundTag root, BlockPos declaredMin) {
         ArrayList<ConstructionEntityEntry> result = new ArrayList<>();
         int version = number(root, "Version", 2);
+        Vec3 globalMin = new Vec3(declaredMin.getX(), declaredMin.getY(), declaredMin.getZ());
         CompoundTag regions = root.getCompoundOrEmpty("Regions");
         for (String regionName : regions.keySet()) {
             CompoundTag region = regions.getCompoundOrEmpty(regionName);
@@ -380,7 +401,10 @@ public final class SchematicPipelineLoader {
                 Vec3 local = readVec(wrapper.getListOrEmpty("Pos"));
                 if (local == null) continue;
                 CompoundTag data = version == 1 ? wrapper.getCompoundOrEmpty("EntityData").copy() : wrapper.copy();
-                Vec3 relative = local.add(regionPos);
+                // Litematica stores entity positions relative to the region origin.
+                // Rebase the region-space coordinate by the global declared
+                // minimum so entities and blocks share one zero-based cuboid.
+                Vec3 relative = local.add(regionPos).subtract(globalMin);
                 normalizeEntityPayload(data, relative);
                 if (!data.isEmpty()) result.add(new ConstructionEntityEntry(relative, data));
             }
@@ -409,6 +433,9 @@ public final class SchematicPipelineLoader {
         data.remove("UUIDLeast");
         data.remove("Dimension");
         data.remove("PortalCooldown");
+        data.remove("Passengers");
+        data.remove("RootVehicle");
+        data.remove("Leash");
         ListTag pos = new ListTag();
         pos.add(net.minecraft.nbt.DoubleTag.valueOf(relative.x));
         pos.add(net.minecraft.nbt.DoubleTag.valueOf(relative.y));

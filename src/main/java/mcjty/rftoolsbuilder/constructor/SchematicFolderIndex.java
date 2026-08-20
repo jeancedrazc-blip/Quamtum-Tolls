@@ -8,12 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Shared index of locally available schematic files.
- *
- * The Constructor is deliberately format-neutral. Files are discovered here,
- * then normalized by SchematicPlanLoader through a format adapter.
- */
+/** Client-visible index of user schematic files. Internal server/cache paths are never exposed in the table. */
 public final class SchematicFolderIndex {
     public enum Format {
         VANILLA_NBT("vanilla_nbt", ".nbt", "Create / Structure NBT"),
@@ -37,20 +32,15 @@ public final class SchematicFolderIndex {
 
         public static Format fromId(String id) {
             if (id == null) return null;
-            // dev.6 compatibility
-            if (id.equals("create_nbt")) return VANILLA_NBT;
-            for (Format format : values()) {
-                if (format.id.equals(id)) return format;
-            }
+            if (id.equals("create_nbt")) return VANILLA_NBT; // dev.6 migration
+            for (Format format : values()) if (format.id.equals(id)) return format;
             return null;
         }
 
         public static Format fromFileName(String fileName) {
             if (fileName == null) return null;
             String lower = fileName.toLowerCase(Locale.ROOT);
-            for (Format format : values()) {
-                if (lower.endsWith(format.extension)) return format;
-            }
+            for (Format format : values()) if (lower.endsWith(format.extension)) return format;
             return null;
         }
     }
@@ -64,12 +54,13 @@ public final class SchematicFolderIndex {
 
     private static final Path DIRECTORY = Path.of("schematics").toAbsolutePath().normalize();
     private static final int MAX_SCAN_DEPTH = 8;
+    private static final String SERVER_STORAGE = "quantumtools_uploaded";
+    private static final String CLIENT_CACHE = ".quantumtools_cache";
 
     private SchematicFolderIndex() {}
 
-    public static Path directory() {
-        return DIRECTORY;
-    }
+    public static Path directory() { return DIRECTORY; }
+    public static Path cacheDirectory() { return DIRECTORY.resolve(CLIENT_CACHE).normalize(); }
 
     public static List<Entry> list() {
         try {
@@ -78,6 +69,7 @@ public final class SchematicFolderIndex {
             try (var stream = Files.walk(DIRECTORY, MAX_SCAN_DEPTH)) {
                 stream.filter(Files::isRegularFile).forEach(path -> {
                     Path relative = DIRECTORY.relativize(path.toAbsolutePath().normalize());
+                    if (isInternal(relative)) return;
                     String name = relative.toString().replace('\\', '/');
                     Format format = Format.fromFileName(name);
                     if (format != null) entries.add(new Entry(name, format));
@@ -95,6 +87,13 @@ public final class SchematicFolderIndex {
         Path path = DIRECTORY.resolve(fileName.replace('\\', '/')).normalize();
         if (!path.startsWith(DIRECTORY)) return null;
         return path;
+    }
+
+    /** Authoritative server files and client preview cache must never appear in the table browser. */
+    private static boolean isInternal(Path relative) {
+        if (relative == null || relative.getNameCount() == 0) return false;
+        String first = relative.getName(0).toString();
+        return first.equals(SERVER_STORAGE) || first.equals(CLIENT_CACHE) || first.startsWith(".");
     }
 
     private static String naturalKey(String name) {
@@ -117,11 +116,8 @@ public final class SchematicFolderIndex {
             int start = i;
             while (i < lower.length() && Character.isDigit(lower.charAt(i))) i++;
             String number = lower.substring(start, i);
-            try {
-                key.append('#').append(String.format("%012d", Long.parseLong(number)));
-            } catch (NumberFormatException ignored) {
-                key.append('#').append(number);
-            }
+            try { key.append('#').append(String.format("%012d", Long.parseLong(number))); }
+            catch (NumberFormatException ignored) { key.append('#').append(number); }
         }
         return key.toString();
     }

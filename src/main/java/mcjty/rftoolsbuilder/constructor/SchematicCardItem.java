@@ -37,6 +37,12 @@ public final class SchematicCardItem extends Item {
         tag.putString(P + "SourceType", sourceType == null ? "" : sourceType);
         tag.putString(P + "SourceName", fileName == null ? "" : fileName);
         tag.putString(P + "SourceFile", fileName == null ? "" : fileName);
+        // Re-writing a card must not inherit hidden transform data from the old dev.4 table.
+        tag.putInt(P + "Rotation", 0);
+        tag.putInt(P + "Mirror", 0);
+        tag.putInt(P + "OffsetX", 0);
+        tag.putInt(P + "OffsetY", 0);
+        tag.putInt(P + "OffsetZ", 0);
         saveRoot(stack, tag);
     }
 

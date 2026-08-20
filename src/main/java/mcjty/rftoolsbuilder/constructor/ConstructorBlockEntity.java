@@ -23,17 +23,23 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.transfer.energy.SimpleEnergyHandler;
 
 import java.io.IOException;
 
-/** Server-authoritative FE schematic printer. */
+/**
+ * Server-authoritative FE schematic printer. A validated/deployed card is the
+ * sole source of truth for the plan. Blocks, deferred blocks and supported
+ * entities share one persistent cursor and one reservation/impact pipeline.
+ */
 public final class ConstructorBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity implements MenuProvider, Container {
     public static final int ENERGY_CAPACITY = 5_000_000;
     public static final int MAX_RECEIVE = 250_000;
     public static final int BASE_PLACEMENT_COST = 1_000;
     public static final int DISTANCE_COST = 15;
     public static final int BLOCK_ENTITY_SURCHARGE = 1_500;
+    public static final int ENTITY_SURCHARGE = 750;
     public static final int AIM_TICKS = 4;
     public static final int CHARGE_TICKS = 5;
     public static final int MIN_FLIGHT_TICKS = 10;
@@ -51,6 +57,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
 
     private BlockPos targetPos;
     private BlockState targetState;
+    private boolean targetIsEntity;
     private int phaseTick;
     private int shotProgress;
     private int flightTicks = MIN_FLIGHT_TICKS;
@@ -59,9 +66,11 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     private boolean shotReserved;
     private boolean pauseAfterShot;
     private ItemStack reservedPlacementStack = ItemStack.EMPTY;
+    private ItemStack entityVisualStack = ItemStack.EMPTY;
     private ItemStack missingItem = ItemStack.EMPTY;
     private ConstructionJob activeJob;
     private CompoundTag pendingJobData;
+    private transient ConstructorEntitySupport.Prepared preparedEntity;
 
     private final ContainerData menuData = new ContainerData() {
         @Override public int get(int index) {
@@ -79,11 +88,12 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 case 10 -> skipMissing ? 1 : 0;
                 case 11 -> replaceBlockEntities ? 1 : 0;
                 case 12 -> flightTicks;
+                case 13 -> targetIsEntity ? 1 : 0;
                 default -> 0;
             };
         }
         @Override public void set(int index, int value) {}
-        @Override public int getCount() { return 13; }
+        @Override public int getCount() { return 14; }
     };
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
@@ -97,6 +107,10 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     public boolean replaceBlockEntities() { return replaceBlockEntities; }
     public BlockPos targetPos() { return targetPos; }
     public BlockState targetState() { return targetState; }
+    public boolean targetIsEntity() { return targetIsEntity; }
+    public ItemStack projectileItem() {
+        return !reservedPlacementStack.isEmpty() ? reservedPlacementStack : entityVisualStack;
+    }
     public int shotProgress() { return shotProgress; }
     public int flightTicks() { return Math.max(MIN_FLIGHT_TICKS, flightTicks); }
     public boolean shotReserved() { return shotReserved; }
@@ -114,15 +128,17 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     public int currentEnergyCost() {
-        return targetPos == null || targetState == null ? 0 : energyCost(targetPos, targetState);
+        if (targetPos == null) return 0;
+        return energyCost(targetPos, targetIsEntity, targetState != null && targetState.hasBlockEntity());
     }
 
+    /** Internal single-block development hook retained for compatibility, never used by normal card flow. */
     public boolean queuePlacement(BlockPos target, BlockState state) {
         if (target == null || state == null || target.equals(worldPosition)) return false;
         if (running || shotReserved) return false;
         activeJob = null;
         pendingJobData = null;
-        prepareTarget(target, ConstructorPlacementHelper.sanitizeState(state));
+        prepareBlockTarget(target, ConstructorPlacementHelper.sanitizeState(state));
         return true;
     }
 
@@ -131,15 +147,14 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         if (running || shotReserved) return false;
         activeJob = new ConstructionJob(plan, transform, substitutions);
         pendingJobData = null;
-        if (!activeJob.hasCurrentBlock()) {
+        if (!activeJob.hasCurrentTarget()) {
             finishJob(0);
             return true;
         }
         loadCurrentFromJob(false);
-        return true;
+        return status != ConstructorStatus.ERROR && status != ConstructorStatus.BLOCKED;
     }
 
-    /** Compatibility overload for older internal callers. */
     public boolean startPlan(ConstructionPlan plan, BlockPos origin, BlockSubstitutionRules substitutions) {
         if (plan == null || origin == null) return false;
         return startPlan(plan, new SchematicTransform(origin, 0, 0, plan.sizeX(), plan.sizeY(), plan.sizeZ()), substitutions);
@@ -159,21 +174,21 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
 
         try {
             boolean includeAir = replaceMode == ConstructorReplaceMode.REPLACE_EMPTY;
-            ConstructionPlan plan = SchematicPlanLoader.loadCard(card, includeAir);
-            if (plan.size() <= 0 || plan.sizeX() != SchematicCardItem.sizeX(card)
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(card, includeAir);
+            if (plan.totalTargets() <= 0 || plan.sizeX() != SchematicCardItem.sizeX(card)
                     || plan.sizeY() != SchematicCardItem.sizeY(card) || plan.sizeZ() != SchematicCardItem.sizeZ(card)) {
                 failJob(ConstructorStatus.ERROR);
                 return false;
             }
             BlockPos anchor = SchematicCardItem.anchor(card);
-            if (worldPosition.distSqr(anchor) > (double) MAX_TARGET_DISTANCE * MAX_TARGET_DISTANCE) {
+            SchematicTransform transform = new SchematicTransform(anchor, SchematicCardItem.rotation(card), SchematicCardItem.mirror(card),
+                    plan.sizeX(), plan.sizeY(), plan.sizeZ());
+            if (!transformWithinRange(transform)) {
                 failJob(ConstructorStatus.BLOCKED);
                 return false;
             }
             BlockSubstitutionRules rules = new BlockSubstitutionRules();
             SchematicCardItem.applyReplacements(card, rules);
-            SchematicTransform transform = new SchematicTransform(anchor, SchematicCardItem.rotation(card), SchematicCardItem.mirror(card),
-                    plan.sizeX(), plan.sizeY(), plan.sizeZ());
             return startPlan(plan, transform, rules);
         } catch (IOException | RuntimeException ignored) {
             failJob(ConstructorStatus.ERROR);
@@ -181,12 +196,60 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         }
     }
 
-    private void prepareTarget(BlockPos target, BlockState state) {
+    private boolean transformWithinRange(SchematicTransform transform) {
+        int maxX = Math.max(0, transform.transformedSizeX() - 1);
+        int maxZ = Math.max(0, transform.transformedSizeZ() - 1);
+        int maxY = Math.max(0, transform.sizeY() - 1);
+        return withinRange(transform.anchor())
+                && withinRange(transform.anchor().offset(maxX, 0, 0))
+                && withinRange(transform.anchor().offset(0, 0, maxZ))
+                && withinRange(transform.anchor().offset(maxX, maxY, maxZ));
+    }
+
+    private boolean withinRange(BlockPos pos) {
+        return worldPosition.distSqr(pos) <= (double) MAX_TARGET_DISTANCE * MAX_TARGET_DISTANCE;
+    }
+
+    private void prepareBlockTarget(BlockPos target, BlockState state) {
         targetPos = target.immutable();
         targetState = ConstructorPlacementHelper.sanitizeState(state);
+        targetIsEntity = false;
+        preparedEntity = null;
+        entityVisualStack = ItemStack.EMPTY;
+        resetTargetPhase();
+    }
+
+    private void prepareEntityTarget(ServerLevel server, boolean preserveReservedFlight) {
+        if (activeJob == null || !activeJob.hasCurrentEntity()) {
+            finishJob(0);
+            return;
+        }
+        ConstructorEntitySupport.Prepared prepared = ConstructorEntitySupport.prepare(server, activeJob.currentEntityEntry(), activeJob.transform());
+        if (prepared == null) {
+            if (skipMissing) {
+                activeJob.advanceEntity();
+                loadCurrentFromJob(false);
+            } else failJob(ConstructorStatus.BLOCKED);
+            return;
+        }
+        BlockPos nextPos = BlockPos.containing(prepared.target());
+        if (preserveReservedFlight && shotReserved && (targetPos == null || !targetPos.equals(nextPos) || !targetIsEntity)) {
+            failJob(ConstructorStatus.ERROR);
+            return;
+        }
+        targetPos = nextPos;
+        targetState = null;
+        targetIsEntity = true;
+        preparedEntity = prepared;
+        entityVisualStack = prepared.projectileStack();
+        if (!preserveReservedFlight || !shotReserved) resetTargetPhase();
+        else running = status != ConstructorStatus.PAUSED && status != ConstructorStatus.BLOCKED && status != ConstructorStatus.ERROR;
+    }
+
+    private void resetTargetPhase() {
         phaseTick = 0;
         shotProgress = 0;
-        flightTicks = ticksForDistance(target);
+        flightTicks = targetPos == null ? MIN_FLIGHT_TICKS : ticksForDistance(targetPos);
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
         missingItem = ItemStack.EMPTY;
@@ -196,30 +259,25 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private void loadCurrentFromJob(boolean preserveReservedFlight) {
-        if (activeJob == null || !activeJob.hasCurrentBlock()) {
+        if (activeJob == null || !activeJob.hasCurrentTarget()) {
             finishJob(0);
             return;
         }
+        if (activeJob.hasCurrentEntity()) {
+            if (level instanceof ServerLevel server) prepareEntityTarget(server, preserveReservedFlight);
+            else failJob(ConstructorStatus.ERROR);
+            return;
+        }
+
         BlockPos nextPos = activeJob.currentWorldPos();
         BlockState nextState = ConstructorPlacementHelper.sanitizeState(activeJob.currentTargetState());
         if (preserveReservedFlight && shotReserved) {
-            if (targetPos == null || !targetPos.equals(nextPos) || targetState == null || !targetState.equals(nextState)) {
+            if (targetPos == null || !targetPos.equals(nextPos) || targetState == null || !targetState.equals(nextState) || targetIsEntity) {
                 failJob(ConstructorStatus.ERROR);
                 return;
             }
-        } else {
-            targetPos = nextPos;
-            targetState = nextState;
-            phaseTick = 0;
-            shotProgress = 0;
-            flightTicks = ticksForDistance(targetPos);
-            shotReserved = false;
-            reservedPlacementStack = ItemStack.EMPTY;
-            missingItem = ItemStack.EMPTY;
-            status = ConstructorStatus.READY;
-        }
-        running = status != ConstructorStatus.PAUSED && status != ConstructorStatus.BLOCKED && status != ConstructorStatus.ERROR;
-        setChangedAndSync();
+            running = status != ConstructorStatus.PAUSED && status != ConstructorStatus.BLOCKED && status != ConstructorStatus.ERROR;
+        } else prepareBlockTarget(nextPos, nextState);
     }
 
     public void pause() {
@@ -249,12 +307,15 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         pendingJobData = null;
         targetPos = null;
         targetState = null;
+        targetIsEntity = false;
+        preparedEntity = null;
         phaseTick = 0;
         shotProgress = 0;
         flightTicks = MIN_FLIGHT_TICKS;
         shotCooldown = 0;
         pauseAfterShot = false;
         reservedPlacementStack = ItemStack.EMPTY;
+        entityVisualStack = ItemStack.EMPTY;
         missingItem = ItemStack.EMPTY;
         running = false;
         status = ConstructorStatus.IDLE;
@@ -281,17 +342,15 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
 
     private void serverTick(ServerLevel level) {
         if (activeJob == null && pendingJobData != null) restorePendingJob();
-        if (!running || targetPos == null || targetState == null) return;
+        if (!running || targetPos == null || (!targetIsEntity && targetState == null)) return;
         if (shotCooldown > 0 && !shotReserved) { shotCooldown--; return; }
 
         if (!level.hasChunkAt(targetPos)) { transition(ConstructorStatus.WAITING_CHUNK); return; }
-        if (!level.getWorldBorder().isWithinBounds(targetPos)
-                || worldPosition.distSqr(targetPos) > (double) MAX_TARGET_DISTANCE * MAX_TARGET_DISTANCE) {
+        if (!level.getWorldBorder().isWithinBounds(targetPos) || !withinRange(targetPos)) {
             failJob(ConstructorStatus.BLOCKED);
             return;
         }
 
-        // A projectile already in flight owns its reservation and continues even if pause was requested.
         if (shotReserved && status == ConstructorStatus.FIRING) {
             shotProgress++;
             if (++phaseTick >= flightTicks()) completeShot(level); else syncClientState();
@@ -333,13 +392,13 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         }
         try {
             boolean includeAir = replaceMode == ConstructorReplaceMode.REPLACE_EMPTY;
-            ConstructionPlan plan = SchematicPlanLoader.loadCard(card, includeAir);
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(card, includeAir);
             BlockSubstitutionRules rules = new BlockSubstitutionRules();
             SchematicCardItem.applyReplacements(card, rules);
             SchematicTransform transform = new SchematicTransform(SchematicCardItem.anchor(card), SchematicCardItem.rotation(card),
                     SchematicCardItem.mirror(card), plan.sizeX(), plan.sizeY(), plan.sizeZ());
             activeJob = ConstructionJob.restore(plan, transform, rules, snapshot);
-            if (!activeJob.hasCurrentBlock()) {
+            if (!activeJob.hasCurrentTarget()) {
                 finishJob(shotProgress);
                 return;
             }
@@ -350,31 +409,40 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private boolean prepareShotIfPossible(ServerLevel level) {
-        if (ConstructorPlacementHelper.shouldIgnore(targetState)) { skipCurrentAndAdvance(); return false; }
+        ConstructorRequirement requirement;
+        if (targetIsEntity) {
+            if (preparedEntity == null && activeJob != null && activeJob.hasCurrentEntity()) {
+                preparedEntity = ConstructorEntitySupport.prepare(level, activeJob.currentEntityEntry(), activeJob.transform());
+            }
+            if (preparedEntity == null) {
+                if (skipMissing) skipCurrentAndAdvance(); else failJob(ConstructorStatus.BLOCKED);
+                return false;
+            }
+            requirement = preparedEntity.requirement();
+        } else {
+            if (ConstructorPlacementHelper.shouldIgnore(targetState)) { skipCurrentAndAdvance(); return false; }
 
-        BlockState current = level.getBlockState(targetPos);
-        boolean sameState = current.equals(targetState);
-        if (sameState && (!targetState.hasBlockEntity() || !replaceBlockEntities)) {
-            skipCurrentAndAdvance();
-            return false;
+            BlockState current = level.getBlockState(targetPos);
+            boolean sameState = current.equals(targetState);
+            if (sameState && (!targetState.hasBlockEntity() || !replaceBlockEntities)) { skipCurrentAndAdvance(); return false; }
+            if (!replaceBlockEntities && current.hasBlockEntity()) { skipCurrentAndAdvance(); return false; }
+            if (!current.isAir() && current.getDestroySpeed(level, targetPos) < 0) { skipCurrentAndAdvance(); return false; }
+            if (!shouldReplace(level, current, targetState) && !sameState) { skipCurrentAndAdvance(); return false; }
+
+            if (!targetState.isAir() && !targetState.canSurvive(level, targetPos)) {
+                deferForSupport();
+                return false;
+            }
+            requirement = currentBlockRequirement();
         }
-        if (!replaceBlockEntities && current.hasBlockEntity()) { skipCurrentAndAdvance(); return false; }
-        if (!current.isAir() && current.getDestroySpeed(level, targetPos) < 0) { skipCurrentAndAdvance(); return false; }
-        if (!shouldReplace(level, current, targetState) && !sameState) { skipCurrentAndAdvance(); return false; }
 
-        if (!targetState.isAir() && !targetState.canSurvive(level, targetPos)) {
-            deferForSupport();
-            return false;
-        }
-
-        ConstructorRequirement requirement = currentRequirement();
         if (requirement.isInvalid()) {
             missingItem = ItemStack.EMPTY;
-            failJob(ConstructorStatus.BLOCKED);
+            if (skipMissing) skipCurrentAndAdvance(); else failJob(ConstructorStatus.BLOCKED);
             return false;
         }
 
-        int cost = energyCost(targetPos, targetState);
+        int cost = currentEnergyCost();
         if (energy.getEnergyStored() < cost) { transition(ConstructorStatus.WAITING_ENERGY); return false; }
 
         ConstructorMaterialAccess.Result material = ConstructorMaterialAccess.simulate(level, worldPosition, requirement);
@@ -387,9 +455,14 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         return true;
     }
 
-    private ConstructorRequirement currentRequirement() {
+    private ConstructorRequirement currentBlockRequirement() {
         CompoundTag data = activeJob == null ? null : activeJob.currentBlockEntityData();
         return ConstructorRequirementRegistry.resolve(targetState, data);
+    }
+
+    private ConstructorRequirement currentRequirement() {
+        if (targetIsEntity) return preparedEntity == null ? ConstructorRequirement.INVALID : preparedEntity.requirement();
+        return currentBlockRequirement();
     }
 
     private boolean shouldReplace(ServerLevel level, BlockState current, BlockState desired) {
@@ -415,7 +488,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private boolean reserveShot(ServerLevel level) {
-        int cost = energyCost(targetPos, targetState);
+        int cost = currentEnergyCost();
         if (energy.getEnergyStored() < cost) { transition(ConstructorStatus.WAITING_ENERGY); return false; }
 
         ConstructorMaterialAccess.Result material = ConstructorMaterialAccess.consume(level, worldPosition, currentRequirement());
@@ -433,6 +506,17 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private void completeShot(ServerLevel level) {
+        if (targetIsEntity) {
+            if (preparedEntity == null && activeJob != null && activeJob.hasCurrentEntity())
+                preparedEntity = ConstructorEntitySupport.prepare(level, activeJob.currentEntityEntry(), activeJob.transform());
+            boolean spawned = ConstructorEntitySupport.spawn(level, preparedEntity);
+            shotReserved = false;
+            reservedPlacementStack = ItemStack.EMPTY;
+            if (!spawned) { failJob(ConstructorStatus.ERROR); return; }
+            finishCurrentAndAdvance(flightTicks());
+            return;
+        }
+
         BlockState current = level.getBlockState(targetPos);
         if ((!replaceBlockEntities && current.hasBlockEntity()) || (!current.isAir() && current.getDestroySpeed(level, targetPos) < 0)) {
             blockShotAtImpact();
@@ -443,10 +527,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         boolean placed = ConstructorPlacementHelper.place(level, targetPos, targetState, reservedPlacementStack, data);
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
-        if (!placed) {
-            failJob(ConstructorStatus.ERROR);
-            return;
-        }
+        if (!placed) { failJob(ConstructorStatus.ERROR); return; }
         finishCurrentAndAdvance(flightTicks());
     }
 
@@ -463,23 +544,27 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     private void skipCurrentAndAdvance() {
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
-        if (activeJob != null && activeJob.skipCurrent()) loadCurrentFromJob(false);
-        else finishJob(0);
+        if (activeJob == null) { finishJob(0); return; }
+        boolean more = activeJob.hasCurrentEntity() ? activeJob.advanceEntity() : activeJob.skipCurrent();
+        if (more) loadCurrentFromJob(false); else finishJob(0);
     }
 
     private void finishCurrentAndAdvance(int finishedShotProgress) {
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
         shotCooldown = SHOT_COOLDOWN_TICKS;
-        if (activeJob != null && activeJob.advance()) {
-            loadCurrentFromJob(false);
-            if (pauseAfterShot) {
-                pauseAfterShot = false;
-                running = false;
-                status = ConstructorStatus.PAUSED;
-                setChangedAndSync();
+        if (activeJob != null) {
+            boolean more = targetIsEntity ? activeJob.advanceEntity() : activeJob.advanceBlock();
+            if (more) {
+                loadCurrentFromJob(false);
+                if (pauseAfterShot) {
+                    pauseAfterShot = false;
+                    running = false;
+                    status = ConstructorStatus.PAUSED;
+                    setChangedAndSync();
+                }
+                return;
             }
-            return;
         }
         finishJob(finishedShotProgress);
     }
@@ -492,6 +577,9 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         shotProgress = finishedShotProgress;
         targetPos = null;
         targetState = null;
+        targetIsEntity = false;
+        preparedEntity = null;
+        entityVisualStack = ItemStack.EMPTY;
         missingItem = ItemStack.EMPTY;
         setChangedAndSync();
     }
@@ -504,10 +592,11 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         setChangedAndSync();
     }
 
-    private int energyCost(BlockPos target, BlockState state) {
+    private int energyCost(BlockPos target, boolean entity, boolean blockEntity) {
         double distance = Math.sqrt(worldPosition.distSqr(target));
         int cost = BASE_PLACEMENT_COST + (int) Math.ceil(distance * DISTANCE_COST);
-        if (state.hasBlockEntity()) cost += BLOCK_ENTITY_SURCHARGE;
+        if (blockEntity) cost += BLOCK_ENTITY_SURCHARGE;
+        if (entity) cost += ENTITY_SURCHARGE;
         return cost;
     }
 
@@ -545,6 +634,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         output.putBoolean("Running", running);
         output.putBoolean("ShotReserved", shotReserved);
         output.putBoolean("PauseAfterShot", pauseAfterShot);
+        output.putBoolean("TargetIsEntity", targetIsEntity);
         output.putInt("PhaseTick", phaseTick);
         output.putInt("ShotProgress", shotProgress);
         output.putInt("FlightTicks", flightTicks);
@@ -553,6 +643,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         if (targetState != null) output.store("TargetState", BlockState.CODEC, targetState);
         if (!schematicCard().isEmpty()) output.store("SchematicCard", ItemStack.CODEC, schematicCard());
         if (!reservedPlacementStack.isEmpty()) output.store("ReservedPlacementStack", ItemStack.CODEC, reservedPlacementStack);
+        if (!entityVisualStack.isEmpty()) output.store("EntityVisualStack", ItemStack.CODEC, entityVisualStack);
         if (!missingItem.isEmpty()) output.store("MissingItem", ItemStack.CODEC, missingItem);
         if (activeJob != null) output.store("ConstructionJob", CompoundTag.CODEC, activeJob.save());
         else if (pendingJobData != null) output.store("ConstructionJob", CompoundTag.CODEC, pendingJobData);
@@ -571,6 +662,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         running = input.getBooleanOr("Running", false);
         shotReserved = input.getBooleanOr("ShotReserved", false);
         pauseAfterShot = input.getBooleanOr("PauseAfterShot", false);
+        targetIsEntity = input.getBooleanOr("TargetIsEntity", false);
         phaseTick = Math.max(0, input.getIntOr("PhaseTick", 0));
         shotProgress = Math.max(0, input.getIntOr("ShotProgress", 0));
         flightTicks = Math.max(MIN_FLIGHT_TICKS, input.getIntOr("FlightTicks", MIN_FLIGHT_TICKS));
@@ -580,18 +672,20 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         targetState = input.read("TargetState", BlockState.CODEC).orElse(null);
         items.set(SLOT_SCHEMATIC, input.read("SchematicCard", ItemStack.CODEC).orElse(ItemStack.EMPTY));
         reservedPlacementStack = input.read("ReservedPlacementStack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
+        entityVisualStack = input.read("EntityVisualStack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         missingItem = input.read("MissingItem", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         pendingJobData = input.read("ConstructionJob", CompoundTag.CODEC).orElse(null);
         activeJob = null;
+        preparedEntity = null;
 
-        // Old development saves could claim an in-flight reservation without a resumable job.
-        // Stop safely rather than charging the same shot twice.
         if ((running || shotReserved) && pendingJobData == null) {
             running = false;
             shotReserved = false;
             reservedPlacementStack = ItemStack.EMPTY;
+            entityVisualStack = ItemStack.EMPTY;
             targetPos = null;
             targetState = null;
+            targetIsEntity = false;
             status = ConstructorStatus.ERROR;
             phaseTick = 0;
             shotProgress = 0;
@@ -622,6 +716,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
         activeJob = null;
         pendingJobData = null;
+        preparedEntity = null;
         return result;
     }
 

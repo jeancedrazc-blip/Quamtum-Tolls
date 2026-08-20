@@ -29,11 +29,13 @@ import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/** Client-side equivalent of Create's schematic deployment handler. */
+/** Client-side deployment/preview handler modeled after Create's schematic handler. */
 public final class SchematicPlacementHandler {
     public static final KeyMapping DEPLOY = new KeyMapping("key.rftoolsbuilder.schematic_deploy", InputConstants.KEY_G, KeyMapping.Category.MISC);
     public static final KeyMapping ROTATE = new KeyMapping("key.rftoolsbuilder.schematic_rotate", InputConstants.KEY_R, KeyMapping.Category.MISC);
@@ -43,6 +45,8 @@ public final class SchematicPlacementHandler {
     private static final Map<BlockState, BlockModelRenderState> MODEL_CACHE = new HashMap<>();
     private static boolean installed;
     private static String loadedKey = "";
+    private static String loadingKey = "";
+    private static String failedPreviewHash = "";
     private static int loadGeneration;
     private static ConstructionPlan plan;
     private static BlockSubstitutionRules substitutions = new BlockSubstitutionRules();
@@ -99,10 +103,12 @@ public final class SchematicPlacementHandler {
                     syncDeployment(card, false);
                     editing = true;
                     message("Schematic deployment cleared");
-                } else {
+                } else if (plan != null) {
                     syncDeployment(card, true);
                     editing = false;
                     message("Schematic position confirmed");
+                } else {
+                    message("Schematic preview is not ready yet");
                 }
             }
         } else if (DEPLOY.consumeClick()) {
@@ -151,37 +157,135 @@ public final class SchematicPlacementHandler {
                 mc.player.getInventory().getSelectedSlot(), anchor, rotation, mirror, deployed, SchematicCardItem.sha256(card)));
     }
 
+    private record LoadResult(ConstructionPlan plan, boolean missingAuthoritativeCopy, String detail) {}
+
     private static void ensurePlan(ItemStack card) {
         int componentHash = card.getComponentsPatch().hashCode();
-        String key = SchematicCardItem.clientFile(card) + "|" + SchematicCardItem.sourceType(card) + "|" + SchematicCardItem.sha256(card);
-        if (key.equals(loadedKey) && componentHash == lastCardComponentsHash) return;
-        loadedKey = key;
-        lastCardComponentsHash = componentHash;
-        plan = null;
-        MODEL_CACHE.clear();
-        substitutions = new BlockSubstitutionRules();
-        SchematicCardItem.applyReplacements(card, substitutions);
-        int generation = ++loadGeneration;
+        String clientFile = SchematicCardItem.clientFile(card);
+        String sourceType = SchematicCardItem.sourceType(card);
+        String sha256 = SchematicCardItem.sha256(card);
+        String key = clientFile + "|" + sourceType + "|" + sha256;
 
-        SchematicFolderIndex.Format format = SchematicFolderIndex.Format.fromId(SchematicCardItem.sourceType(card));
-        if (format == null) format = SchematicFolderIndex.Format.fromFileName(SchematicCardItem.clientFile(card));
+        boolean sameCard = key.equals(loadedKey) && componentHash == lastCardComponentsHash;
+        if (sameCard && plan != null) return;
+        if (sameCard && key.equals(loadingKey)) return;
+        if (sameCard && ClientSchematicPreviewCache.isDownloading(sha256)) return;
+        if (sameCard && sha256.equals(failedPreviewHash)) return;
+
+        if (!sameCard) {
+            ClientSchematicPreviewCache.cancelOutstanding();
+            loadedKey = key;
+            lastCardComponentsHash = componentHash;
+            plan = null;
+            MODEL_CACHE.clear();
+            substitutions = new BlockSubstitutionRules();
+            SchematicCardItem.applyReplacements(card, substitutions);
+            failedPreviewHash = "";
+            ++loadGeneration;
+        }
+
+        SchematicFolderIndex.Format format = SchematicFolderIndex.Format.fromId(sourceType);
+        if (format == null) format = SchematicFolderIndex.Format.fromFileName(clientFile);
         if (format == null) {
+            failedPreviewHash = sha256;
             message("Unsupported schematic format on card");
             return;
         }
-        SchematicFolderIndex.Entry entry = new SchematicFolderIndex.Entry(SchematicCardItem.clientFile(card), format);
-        CompletableFuture.supplyAsync(() -> {
-            try { return UniversalSchematicLoader.load(entry, false); }
-            catch (IOException exception) { throw new RuntimeException(exception); }
-        }).whenComplete((loaded, error) -> Minecraft.getInstance().execute(() -> {
-            if (generation != loadGeneration) return;
-            if (error != null || loaded == null || loaded.totalTargets() == 0) {
-                plan = null;
-                message("Could not preview schematic: " + safeMessage(error));
-                return;
+
+        final SchematicFolderIndex.Format resolvedFormat = format;
+        final int generation = loadGeneration;
+        final int expectedX = SchematicCardItem.sizeX(card);
+        final int expectedY = SchematicCardItem.sizeY(card);
+        final int expectedZ = SchematicCardItem.sizeZ(card);
+        loadingKey = key;
+
+        CompletableFuture.supplyAsync(() -> loadBestAvailable(clientFile, resolvedFormat, sha256))
+                .whenComplete((result, error) -> Minecraft.getInstance().execute(() -> {
+                    if (generation != loadGeneration) return;
+                    loadingKey = "";
+                    if (error != null) {
+                        plan = null;
+                        failedPreviewHash = sha256;
+                        message("Could not parse schematic preview: " + safeMessage(error));
+                        return;
+                    }
+                    if (result == null || result.missingAuthoritativeCopy()) {
+                        plan = null;
+                        Minecraft mc = Minecraft.getInstance();
+                        if (mc.player != null && validHash(sha256)) {
+                            ClientSchematicPreviewCache.request(mc.player.getInventory().getSelectedSlot(), sha256);
+                        } else {
+                            failedPreviewHash = sha256;
+                            message(result == null || result.detail().isBlank() ? "Schematic preview file is missing" : result.detail());
+                        }
+                        return;
+                    }
+
+                    ConstructionPlan loaded = result.plan();
+                    if (loaded == null || loaded.totalTargets() == 0) {
+                        plan = null;
+                        failedPreviewHash = sha256;
+                        message("Schematic contains no previewable targets");
+                        return;
+                    }
+                    if (expectedX > 0 && (loaded.sizeX() != expectedX || loaded.sizeY() != expectedY || loaded.sizeZ() != expectedZ)) {
+                        plan = null;
+                        failedPreviewHash = sha256;
+                        message("Schematic preview bounds do not match the written card");
+                        return;
+                    }
+                    plan = loaded;
+                    failedPreviewHash = "";
+                }));
+    }
+
+    private static LoadResult loadBestAvailable(String clientFile, SchematicFolderIndex.Format format, String sha256) {
+        try {
+            Path local = SchematicFolderIndex.resolve(clientFile);
+            if (local != null && Files.isRegularFile(local)) {
+                if (!validHash(sha256) || ClientSchematicPreviewCache.verifySha256(local, sha256)) {
+                    return new LoadResult(UniversalSchematicLoader.load(new SchematicFolderIndex.Entry(clientFile, format), false), false, "");
+                }
             }
-            plan = loaded;
-        }));
+
+            if (validHash(sha256)) {
+                Path cache = ClientSchematicPreviewCache.cachePath(sha256, format);
+                if (cache != null) {
+                    if (ClientSchematicPreviewCache.verifySha256(cache, sha256)) {
+                        SchematicFolderIndex.Entry entry = ClientSchematicPreviewCache.cacheEntry(cache, format);
+                        if (entry != null) return new LoadResult(UniversalSchematicLoader.load(entry, false), false, "");
+                    } else {
+                        try { Files.deleteIfExists(cache); } catch (IOException ignored) {}
+                    }
+                }
+            }
+            return new LoadResult(null, true, "Local schematic is unavailable; requesting authoritative server copy");
+        } catch (IOException exception) {
+            throw new RuntimeException(exception);
+        }
+    }
+
+    /** Called after size + SHA validation and atomic cache commit. */
+    public static void onPreviewCacheReady(String hash, SchematicFolderIndex.Format format, Path path) {
+        if (!hash.equals(currentCardHash())) return;
+        failedPreviewHash = "";
+        loadingKey = "";
+        plan = null;
+        MODEL_CACHE.clear();
+        // Keep loadedKey/card hash so ensurePlan retries the same card from its now-verified cache.
+    }
+
+    public static void onPreviewCacheFailed(String hash) {
+        if (hash == null || hash.isBlank() || hash.equals(currentCardHash())) failedPreviewHash = hash == null ? "" : hash;
+        loadingKey = "";
+        plan = null;
+    }
+
+    private static String currentCardHash() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return "";
+        ItemStack card = mc.player.getMainHandItem();
+        return card.getItem() instanceof SchematicCardItem ? SchematicCardItem.sha256(card) : "";
     }
 
     private static void onSubmitGeometry(SubmitCustomGeometryEvent event) {
@@ -220,14 +324,21 @@ public final class SchematicPlacementHandler {
     }
 
     private static void clearTransient() {
-        if (!loadedKey.isEmpty()) {
+        if (!loadedKey.isEmpty() || ClientSchematicPreviewCache.isDownloading(currentCardHash())) {
+            ClientSchematicPreviewCache.cancelOutstanding();
             loadedKey = "";
+            loadingKey = "";
+            failedPreviewHash = "";
             plan = null;
             MODEL_CACHE.clear();
             editing = false;
             verticalOffset = 0;
             ++loadGeneration;
         }
+    }
+
+    private static boolean validHash(String hash) {
+        return hash != null && hash.matches("[0-9a-fA-F]{64}");
     }
 
     private static String mirrorName(int mirror) {

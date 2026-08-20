@@ -8,7 +8,7 @@ import net.minecraft.world.level.block.AbstractBannerBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirtPathBlock;
-import net.minecraft.world.level.block.FarmBlock;
+import net.minecraft.world.level.block.FarmlandBlock;
 import net.minecraft.world.level.block.SeaPickleBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.TurtleEggBlock;
@@ -83,10 +83,8 @@ public final class ConstructorRequirement {
     public boolean isInvalid() { return invalid; }
     public List<StackRequirement> requirements() { return requirements; }
 
-    /** Vanilla/default rule. Addons can override this through ConstructorRequirementRegistry. */
     static ConstructorRequirement defaultFor(BlockState state, CompoundTag blockEntityData) {
         if (state == null || state.isAir() || state.getBlock() == Blocks.STRUCTURE_VOID) return NONE;
-
         if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
                 && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) return NONE;
         if (state.hasProperty(BlockStateProperties.BED_PART)
@@ -103,11 +101,9 @@ public final class ConstructorRequirement {
         if (block instanceof SeaPickleBlock && state.hasProperty(BlockStateProperties.PICKLES)) return consume(item, state.getValue(BlockStateProperties.PICKLES));
         if (block instanceof SnowLayerBlock && state.hasProperty(BlockStateProperties.LAYERS)) return consume(item, state.getValue(BlockStateProperties.LAYERS));
         if (state.hasProperty(BlockStateProperties.CANDLES)) return consume(item, state.getValue(BlockStateProperties.CANDLES));
-        if (block instanceof FarmBlock || block instanceof DirtPathBlock) return consume(Items.DIRT, 1);
+        if (block instanceof FarmlandBlock || block instanceof DirtPathBlock) return consume(Items.DIRT, 1);
         if (block == Blocks.TALL_GRASS) return consume(Items.SHORT_GRASS, 2);
         if (block == Blocks.LARGE_FERN) return consume(Items.FERN, 2);
-
-        // Safe block-entity data determines appearance/configuration; the physical item is consumed here.
         if (block instanceof AbstractBannerBlock) return consume(item, 1);
         return consume(item, 1);
     }

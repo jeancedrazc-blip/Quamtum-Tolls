@@ -79,7 +79,10 @@ public final class SchematicPlanLoader {
 
             ListTag pos = blockTag.getListOrEmpty("pos");
             if (pos.size() < 3) continue;
-            BlockPos relative = new BlockPos(pos.getInt(0), pos.getInt(1), pos.getInt(2));
+            int x = pos.getInt(0).orElse(0);
+            int y = pos.getInt(1).orElse(0);
+            int z = pos.getInt(2).orElse(0);
+            BlockPos relative = new BlockPos(x, y, z);
             entries.add(new ConstructionEntry(relative, state));
         }
 

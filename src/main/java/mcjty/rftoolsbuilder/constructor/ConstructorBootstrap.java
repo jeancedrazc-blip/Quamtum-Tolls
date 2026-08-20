@@ -9,6 +9,7 @@ import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
@@ -35,7 +36,11 @@ public final class ConstructorBootstrap {
     public static final DeferredBlock<ConstructorBlock> CONSTRUCTOR = BLOCKS.registerBlock(
             "constructor",
             ConstructorBlock::new,
-            props -> props.strength(5.0f, 12.0f).sound(SoundType.METAL).noOcclusion()
+            props -> props.strength(5.0f, 12.0f)
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
+                    .lightLevel(state -> state.hasProperty(BlockStateProperties.LIT)
+                            && state.getValue(BlockStateProperties.LIT) ? 13 : 0)
     );
 
     public static final DeferredBlock<Block> CONSTRUCTOR_TURRET_VISUAL = BLOCKS.registerBlock(

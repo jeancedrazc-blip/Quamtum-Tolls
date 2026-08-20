@@ -1,73 +1,74 @@
 # Quantum Tools — Project State
 
-## Canonical baseline
+## Source of truth
 
-- Current project version: **3.0.6-dev.8**
+The editable GitHub project is the source of truth for all future Quantum Tools development.
+
+- Current source version: **3.0.6-dev.9**
 - Minecraft: **26.1.2**
 - Loader: **NeoForge**
-- Minimum NeoForge declared by the current JAR: **26.1.2.95**
-- Mod id preserved by the current build: `rftoolsbuilder`
-- Canonical baseline metadata: `baseline/3.0.6-dev.8/BASELINE.json`
-- Canonical JAR identity: `QuantumTools-3.0.6-dev.8.jar`
-- SHA-256: `ba9a16dd48d8229768d8cb927c0fa6b09a1560cec934ab60386afe3944f3f85b`
-- Internal mod metadata version: `3.0.6-dev.8`
-- Compiled classes in canonical JAR: **85**
-- Non-class resources in canonical JAR: **68**
-- Original `.java` files embedded in canonical JAR: **0**
+- NeoForge dependency: **26.1.2.95**
+- Java toolchain: **25**
+- Mod id: `rftoolsbuilder`
+- Java source: `src/main/java`
+- Resources/assets: `src/main/resources`
 
-## Source-of-truth rule
+Compiled JARs are outputs used for testing and release validation. They must not diverge from the source tree or be used as the primary editing base.
 
-The user supplied the 3.0.6-dev.8 JAR on 2026-08-20 and explicitly approved it as the base for all future Quantum Tools work. It supersedes the former 3.0.5 baseline.
+## Constructor visual
 
-Before changing Quantum Tools in any conversation:
+The user-approved Constructor visual is **V5**. Its models and textures are stored directly in `src/main/resources/assets/rftoolsbuilder`.
 
-1. Read this file and `baseline/3.0.6-dev.8/BASELINE.json`.
-2. Treat **3.0.6-dev.8** as the canonical implementation unless the user explicitly approves a newer baseline.
-3. Verify the canonical SHA-256 whenever a candidate baseline JAR is available.
-4. Never replace this baseline with 3.0.5 or another older remembered version.
-5. Never invent missing changelog entries.
-6. Preserve existing behavior unless an explicit change request says otherwise.
-7. Do **not** rebuild unrelated classes from guessed/decompiled Java. The supplied JAR contains no original Java source text, so the unchanged compiled classes are authoritative.
-8. For a future change, reconstruct/edit only the explicitly requested class/resource and preserve every untouched entry from the canonical JAR.
-9. Before accepting a new build, compare changed entries against the intended change set and reject unrelated removals or modifications.
+V5 is frozen. Schematic, UI, networking, material, energy or gameplay corrections must not alter this model unless a visual change is explicitly requested.
 
-## Current implementation visible in the 3.0.6-dev.8 baseline
+The approved visual includes the low/wide stabilized base, multipart turret/barrel layout, cleaned white/gunmetal/cyan textures, emissive energy elements and the shortened rear profile approved in-game.
 
-The supplied JAR contains the Builder/Quarry implementation, Quarry Card classes, filter UI/menu classes, Builder UI/menu classes, renderer classes, translations, recipes, models and textures. It also contains the current Constructor/schematic implementation, including construction plan/job classes, schematic loading/upload handling, substitution rules, safe block-entity handling, Constructor networking/UI/rendering and related client classes.
+## Schematic work — current stage
 
-A source-file inventory recovered from class debug metadata is stored at `baseline/3.0.6-dev.8/source_file_summary.txt`.
+Work is stage-gated. The current schematic stage is **Placement Editor / deployment usability**.
 
-## Approved construction-machine direction
+Implemented in 3.0.6-dev.9:
 
-These decisions are approved project state and should be preserved unless explicitly changed later:
+- mandatory G/R/M schematic keybinds removed;
+- mandatory Shift+scroll placement control removed;
+- right-clicking a written Schematic Card opens a placement UI;
+- crosshair is sampled only for initial/explicit targeting instead of continuously dragging the schematic;
+- anchor remains fixed until changed deliberately;
+- X/Y/Z movement via -10, -1, +1 and +10 controls;
+- rotation 0°, 90°, 180°, 270°;
+- mirror None / Left-Right / Front-Back;
+- explicit target, place-in-front and center controls;
+- reset, confirm, cancel and clear deployment;
+- hologram remains visible while the non-pausing placement screen is open;
+- deployment confirmation synchronizes anchor/rotation/mirror/deployed state to the server.
 
-- The new schematic-driven construction machine must have its **own physical model/form**, not look like a normal cubic block.
-- Do **not** use the word `Quantum` in the machine's name.
-- The machine should be format-agnostic through adapters/readers instead of being locked to one schematic source.
-- Planned compatibility includes Create schematic data and other schematic formats where technically practical.
-- The construction projectile must use the **full texture of the block being placed**, not an approximate color.
-- The machine needs a **block substitution system**, e.g. schematic cobblestone -> build with smooth stone.
-- The placement animation should be a distinctive part of the machine's identity.
+No later schematic problem should be treated as the active stage until this editor is validated in-game.
 
-### Approved physical model — locked on 2026-08-19
+## Build validation
 
-The user approved the sci-fi cannon concept shown in the final concept sheet. Treat this as the canonical visual direction for implementation:
+The source with the Placement Editor and approved V5 Constructor assets has compiled successfully with Gradle/NeoForge before promotion.
 
-- Overall silhouette is a **dedicated sci-fi cannon/turret**, not a generic industrial machine or robotic arm.
-- Long horizontal cannon body with layered futuristic armor panels and an exposed cyan energy channel along the barrel.
-- Cannon must be mounted on a real aiming assembly: **horizontal turret rotation plus vertical elevation**, so the barrel visibly points toward the exact block-placement position.
-- Central pivot/joint is visually exposed and should read as the mechanical aiming axis.
-- Base is **compact, low-profile and turret-like**, with several articulated/splayed stabilizer feet around it; avoid the large bulky circular pedestal from rejected concepts.
-- Main materials/colors: light metallic/white armor, dark gunmetal structure and cyan emissive accents. Keep the design clean and engineered rather than overdecorated.
-- The muzzle is a dedicated energy emitter, visually distinct from a conventional firearm barrel.
-- The approved concept is a visual reference only; incidental text/spec numbers rendered in the concept image (range, reload, energy naming, etc.) are **not gameplay requirements unless explicitly approved later**.
+For every future change:
 
-## Baseline storage and integrity
+1. implement in source;
+2. compile;
+3. validate the changed system;
+4. test in Minecraft when behavior or visuals depend on the game runtime;
+5. fix regressions before moving to the next stage;
+6. update source and documentation together.
 
-The GitHub connector used in this session cannot directly upload arbitrary local binary ZIP/JAR files. The repository therefore records the canonical binary identity by exact SHA-256 and stores the recovered engineering/source inventory and preservation rules. Do not claim a repository binary is canonical unless its SHA-256 matches the value above.
+## Mandatory development standard
 
-The complete locally generated engineering baseline for 3.0.6-dev.8 contains the exact supplied JAR, 85 exact compiled classes, 68 exact resources, per-entry hashes, API signatures and `javap` bytecode references. Those artifacts are the reconstruction reference; guessed Java is never allowed to override an unchanged canonical class.
+`PADRAO_DE_DESENVOLVIMENTO_QUANTUM_TOOLS.txt` is the project process specification. It defines:
 
-## Versioning rule
+- one-stage-at-a-time development;
+- required modeling fidelity and in-game validation;
+- prohibition on unauthorized simplification;
+- no placeholder or half-implemented features being called complete;
+- full schematic pipeline expectations;
+- UI-first placement controls without mandatory conflicting keybinds;
+- client/server authority and networking validation;
+- regression testing;
+- source synchronization and definition of done.
 
-The next release must be created from the verified **3.0.6-dev.8** baseline and must increment from it. Do not reuse 3.0.5 or another earlier build as the implementation base.
+This standard must be followed for subsequent Quantum Tools work.

@@ -1,0 +1,13 @@
+{
+  "project": "Quantum Tools",
+  "mod_id": "rftoolsbuilder",
+  "version": "3.0.6-dev.8",
+  "minecraft": "26.1.2",
+  "neoforge_min": "26.1.2.95",
+  "canonical_jar": "QuantumTools-3.0.6-dev.8.jar",
+  "canonical_jar_sha256": "ba9a16dd48d8229768d8cb927c0fa6b09a1560cec934ab60386afe3944f3f85b",
+  "class_count": 85,
+  "resource_count": 68,
+  "original_java_sources_in_jar": 0,
+  "preservation_rule": "The canonical 3.0.6-dev.8 JAR is authoritative. Unchanged classes/resources must not be reconstructed or modified. Only explicitly approved entries may differ."
+}

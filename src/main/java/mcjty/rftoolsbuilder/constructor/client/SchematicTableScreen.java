@@ -193,7 +193,7 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
 
         int color = statusColor(status);
         QuantumUiTheme.statusLamp(gui, x + 12, y + 145, color,
-                status != SchematicTableBlockEntity.STATUS_IDLE);
+                status != SchematicTableBlockEntity.STATUS_NO_CARD);
         gui.text(font, Component.literal(statusText(status)), x + 25, y + 144, color, false);
     }
 

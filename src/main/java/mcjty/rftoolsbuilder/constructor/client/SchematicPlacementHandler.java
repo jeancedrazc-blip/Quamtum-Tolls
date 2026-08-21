@@ -594,7 +594,7 @@ public final class SchematicPlacementHandler {
             int blockLight = mc.level.getBrightness(LightLayer.BLOCK, worldPos);
             int skyLight = mc.level.getBrightness(LightLayer.SKY, worldPos);
             int packedLight = LightCoordsUtil.pack(blockLight, skyLight);
-            renderState.submit(pose, collector, packedLight, OverlayTexture.NO_OVERLAY, -1);
+            // NeoForge 26.1's reference SubmitCustomGeometryEvent renderer passes 0 here.\n            // -1 is interpreted as an overlay by shader pipelines and can wash out\n            // the entire frame for a large schematic.\n            renderState.submit(pose, collector, packedLight, OverlayTexture.NO_OVERLAY, 0);
             pose.popPose();
         }
     }

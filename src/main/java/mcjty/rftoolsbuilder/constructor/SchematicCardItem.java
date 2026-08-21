@@ -190,6 +190,9 @@ public final class SchematicCardItem extends Item {
         text.accept(Component.literal("Format: " + (format == null ? sourceType(stack) : format.label())));
         if (hasBounds(stack)) text.accept(Component.literal("Size: " + sizeX(stack) + " × " + sizeY(stack) + " × " + sizeZ(stack)));
         text.accept(Component.literal(deployed(stack) ? "Positioned at " + anchor(stack).toShortString() : "Not positioned — deploy in world first"));
+        text.accept(Component.literal(deployed(stack)
+                ? "Sneak + right-click to edit placement"
+                : "Right-click a block to deploy the live preview"));
         int replacements = replacementCount(stack);
         if (replacements > 0) text.accept(Component.literal("Replacements: " + replacements));
     }

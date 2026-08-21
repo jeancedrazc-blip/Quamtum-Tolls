@@ -36,7 +36,9 @@ public final class QuantumUiTheme {
 
     public static void window(GuiGraphicsExtractor gui, int x, int y, int w, int h) {
         gui.fill(x, y, x + w, y + h, BG);
-        gui.fill(x + 2, y + 2, x + w - 2, y + h - 2, SURFACE_2);\n        brushed(gui, x + 3, y + 3, x + w - 3, y + h - 3, 0xFF10212B, 5);\n        rivets(gui, x + 5, y + 5, x + w - 5, y + h - 5);
+        gui.fill(x + 2, y + 2, x + w - 2, y + h - 2, SURFACE_2);
+        brushed(gui, x + 3, y + 3, x + w - 3, y + h - 3, 0xFF10212B, 5);
+        rivets(gui, x + 5, y + 5, x + w - 5, y + h - 5);
         cornerCuts(gui, x, y, w, h, BG);
         frame(gui, x + 2, y + 2, x + w - 2, y + h - 2, BORDER_DIM);
     }
@@ -47,7 +49,9 @@ public final class QuantumUiTheme {
 
     public static void panel(GuiGraphicsExtractor gui, int x1, int y1, int x2, int y2, int border, int fill) {
         gui.fill(x1, y1, x2, y2, border);
-        gui.fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1, fill);\n        brushed(gui, x1 + 2, y1 + 2, x2 - 2, y2 - 2, shade(fill), 4);\n        rivets(gui, x1 + 3, y1 + 3, x2 - 3, y2 - 3);
+        gui.fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1, fill);
+        brushed(gui, x1 + 2, y1 + 2, x2 - 2, y2 - 2, shade(fill), 4);
+        rivets(gui, x1 + 3, y1 + 3, x2 - 3, y2 - 3);
         // Small clipped corners keep the HUD technical without becoming anti-vanilla.
         gui.fill(x1, y1, x1 + 3, y1 + 1, BG);
         gui.fill(x2 - 3, y1, x2, y1 + 1, BG);
@@ -121,7 +125,8 @@ public final class QuantumUiTheme {
         int border = active ? accent : BORDER_DIM;
         gui.fill(x - 2, y - 2, x + 20, y + 20, border);
         gui.fill(x - 1, y - 1, x + 19, y + 19, DEEP);
-        gui.fill(x, y, x + 18, y + 18, 0xFF0A141B);\n        brushed(gui, x + 1, y + 1, x + 17, y + 17, 0xFF10232C, 3);
+        gui.fill(x, y, x + 18, y + 18, 0xFF0A141B);
+        brushed(gui, x + 1, y + 1, x + 17, y + 17, 0xFF10232C, 3);
     }
 
     public static void buttonSurface(GuiGraphicsExtractor gui, int x, int y, int width, int height,

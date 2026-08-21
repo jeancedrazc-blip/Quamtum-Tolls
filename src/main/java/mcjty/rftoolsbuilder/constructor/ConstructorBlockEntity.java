@@ -46,9 +46,11 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     public static final int SHOT_COOLDOWN_TICKS = 4;
     public static final int MAX_TARGET_DISTANCE = 256;
     public static final int SLOT_SCHEMATIC = 0;
+    public static final int SLOT_TABLET_INPUT = 1;
+    public static final int SLOT_TABLET_OUTPUT = 2;
 
     private final ConstructorEnergyStorage energy = new ConstructorEnergyStorage(ENERGY_CAPACITY, MAX_RECEIVE);
-    private final NonNullList<ItemStack> items = NonNullList.withSize(1, ItemStack.EMPTY);
+    private final NonNullList<ItemStack> items = NonNullList.withSize(3, ItemStack.EMPTY);
 
     private ConstructorStatus status = ConstructorStatus.IDLE;
     private ConstructorReplaceMode replaceMode = ConstructorReplaceMode.REPLACE_ANY;
@@ -118,6 +120,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     public ItemStack missingItem() { return missingItem; }
     public ContainerData menuData() { return menuData; }
     public ItemStack schematicCard() { return items.get(SLOT_SCHEMATIC); }
+    public ItemStack tabletInput() { return items.get(SLOT_TABLET_INPUT); }
+    public ItemStack tabletOutput() { return items.get(SLOT_TABLET_OUTPUT); }
     public int jobIndex() { return activeJob == null ? 0 : activeJob.completed(); }
     public int jobTotal() { return activeJob == null ? (targetPos == null ? 0 : 1) : activeJob.total(); }
     public float jobProgress() { return activeJob == null ? (status == ConstructorStatus.COMPLETE ? 1f : 0f) : activeJob.progress(); }
@@ -331,8 +335,40 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             case 3 -> { replaceMode = replaceMode.next(); setChangedAndSync(); yield true; }
             case 4 -> { skipMissing = !skipMissing; setChangedAndSync(); yield true; }
             case 5 -> { replaceBlockEntities = !replaceBlockEntities; setChangedAndSync(); yield true; }
+            case 6 -> writeMaterialTablet();
             default -> false;
         };
+    }
+
+    private boolean writeMaterialTablet() {
+        if (!(tabletInput().getItem() instanceof MaterialListTabletItem)
+                || MaterialListTabletItem.isWritten(tabletInput()) || !tabletOutput().isEmpty()
+                || !SchematicCardItem.hasSource(schematicCard())) return false;
+        try {
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
+            java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+            for (var entry : plan.entries()) {
+                String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                        .getKey(entry.sourceState().getBlock()).toString();
+                counts.merge(id, 1, Integer::sum);
+            }
+            net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
+            tag.putString("QTSchematicName", SchematicCardItem.sourceName(schematicCard()));
+            tag.putInt("QTMaterialKinds", counts.size());
+            tag.putInt("QTMaterialTotal", plan.blockCount());
+            StringBuilder encoded = new StringBuilder();
+            counts.forEach((id, count) -> encoded.append(id).append('=').append(count).append(';'));
+            tag.putString("QTMaterials", encoded.toString());
+            ItemStack written = tabletInput().copyWithCount(1);
+            written.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            items.set(SLOT_TABLET_INPUT, ItemStack.EMPTY);
+            items.set(SLOT_TABLET_OUTPUT, written);
+            setChangedAndSync();
+            return true;
+        } catch (IOException | RuntimeException ignored) {
+            return false;
+        }
     }
 
     public static void tick(Level level, BlockPos pos, BlockState blockState, ConstructorBlockEntity be) {
@@ -642,6 +678,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         if (targetPos != null) output.putLong("TargetPos", targetPos.asLong());
         if (targetState != null) output.store("TargetState", BlockState.CODEC, targetState);
         if (!schematicCard().isEmpty()) output.store("SchematicCard", ItemStack.CODEC, schematicCard());
+        if (!tabletInput().isEmpty()) output.store("TabletInput", ItemStack.CODEC, tabletInput());
+        if (!tabletOutput().isEmpty()) output.store("TabletOutput", ItemStack.CODEC, tabletOutput());
         if (!reservedPlacementStack.isEmpty()) output.store("ReservedPlacementStack", ItemStack.CODEC, reservedPlacementStack);
         if (!entityVisualStack.isEmpty()) output.store("EntityVisualStack", ItemStack.CODEC, entityVisualStack);
         if (!missingItem.isEmpty()) output.store("MissingItem", ItemStack.CODEC, missingItem);
@@ -671,6 +709,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         targetPos = packed == Long.MIN_VALUE ? null : BlockPos.of(packed);
         targetState = input.read("TargetState", BlockState.CODEC).orElse(null);
         items.set(SLOT_SCHEMATIC, input.read("SchematicCard", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+        items.set(SLOT_TABLET_INPUT, input.read("TabletInput", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+        items.set(SLOT_TABLET_OUTPUT, input.read("TabletOutput", ItemStack.CODEC).orElse(ItemStack.EMPTY));
         reservedPlacementStack = input.read("ReservedPlacementStack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         entityVisualStack = input.read("EntityVisualStack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         missingItem = input.read("MissingItem", ItemStack.CODEC).orElse(ItemStack.EMPTY);
@@ -692,40 +732,43 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         }
     }
 
-    @Override public int getContainerSize() { return 1; }
-    @Override public boolean isEmpty() { return schematicCard().isEmpty(); }
-    @Override public ItemStack getItem(int slot) { return slot == SLOT_SCHEMATIC ? schematicCard() : ItemStack.EMPTY; }
+    @Override public int getContainerSize() { return items.size(); }
+    @Override public boolean isEmpty() { return items.stream().allMatch(ItemStack::isEmpty); }
+    @Override public ItemStack getItem(int slot) {
+        return slot >= 0 && slot < items.size() ? items.get(slot) : ItemStack.EMPTY;
+    }
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
-        if (slot != SLOT_SCHEMATIC || !canRemoveCard()) return ItemStack.EMPTY;
-        ItemStack stack = schematicCard();
+        if (slot < 0 || slot >= items.size() || (slot == SLOT_SCHEMATIC && !canRemoveCard())) return ItemStack.EMPTY;
+        ItemStack stack = items.get(slot);
         if (stack.isEmpty()) return ItemStack.EMPTY;
         ItemStack result = stack.split(amount);
-        if (stack.isEmpty()) {
-            items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
-            clearJob();
-        } else setChangedAndSync();
+        if (stack.isEmpty()) items.set(slot, ItemStack.EMPTY);
+        if (slot == SLOT_SCHEMATIC && items.get(slot).isEmpty()) clearJob(); else setChangedAndSync();
         return result;
     }
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
-        if (slot != SLOT_SCHEMATIC || !canRemoveCard()) return ItemStack.EMPTY;
-        ItemStack result = schematicCard();
-        items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
-        activeJob = null;
-        pendingJobData = null;
-        preparedEntity = null;
+        if (slot < 0 || slot >= items.size() || (slot == SLOT_SCHEMATIC && !canRemoveCard())) return ItemStack.EMPTY;
+        ItemStack result = items.get(slot);
+        items.set(slot, ItemStack.EMPTY);
+        if (slot == SLOT_SCHEMATIC) {
+            activeJob = null;
+            pendingJobData = null;
+            preparedEntity = null;
+        }
         return result;
     }
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        if (slot != SLOT_SCHEMATIC || (!canRemoveCard() && !ItemStack.matches(schematicCard(), stack))) return;
-        items.set(SLOT_SCHEMATIC, stack);
+        if (slot < 0 || slot >= items.size()) return;
+        if (slot == SLOT_SCHEMATIC && (!canRemoveCard() && !ItemStack.matches(schematicCard(), stack))) return;
+        items.set(slot, stack);
         if (!stack.isEmpty() && stack.getCount() > 1) stack.setCount(1);
-        if (stack.isEmpty()) clearJob(); else setChangedAndSync();
+        if (slot == SLOT_SCHEMATIC && stack.isEmpty()) clearJob(); else setChangedAndSync();
     }
 
     @Override public boolean stillValid(Player player) { return Container.stillValidBlockEntity(this, player); }

@@ -1,6 +1,5 @@
 package mcjty.rftoolsbuilder.constructor.client;
 
-import mcjty.rftoolsbuilder.constructor.SchematicCardItem;
 import mcjty.rftoolsbuilder.constructor.SchematicFolderIndex;
 import mcjty.rftoolsbuilder.constructor.SchematicTableBlockEntity;
 import mcjty.rftoolsbuilder.constructor.SchematicTableMenu;
@@ -127,7 +126,7 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
             }
         }
 
-        boolean inputPresent = menu.table() != null && menu.table().inputCard().getItem() instanceof SchematicCardItem;
+        boolean inputPresent = menu.table() != null && SchematicTableBlockEntity.isWritableInput(menu.table().inputCard());
         if (confirmButton != null) confirmButton.active = selectedIndex >= 0 && inputPresent && !menu.hasOutput() && !busy;
         if (upButton != null) upButton.active = !busy && firstVisible > 0;
         if (downButton != null) downButton.active = !busy && firstVisible + ROWS < schematics.size();
@@ -161,7 +160,7 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
         QuantumUiTheme.slotFrame(gui, x + 25, y + 64, menu.hasReservedInput(), QuantumUiTheme.CYAN);
         QuantumUiTheme.slotFrame(gui, x + 255, y + 64, menu.hasOutput(), QuantumUiTheme.GREEN);
 
-        gui.text(font, Component.literal("blank"), x + 18, y + 90, QuantumUiTheme.MUTED, false);
+        gui.text(font, Component.literal("creator"), x + 15, y + 90, QuantumUiTheme.MUTED, false);
         gui.text(font, Component.literal("card"), x + 20, y + 101, QuantumUiTheme.MUTED, false);
         gui.text(font, Component.literal(menu.hasOutput() ? "ready" : "—"), x + 266, y + 90,
                 menu.hasOutput() ? QuantumUiTheme.GREEN : QuantumUiTheme.MUTED, false);
@@ -203,7 +202,7 @@ public final class SchematicTableScreen extends AbstractContainerScreen<Schemati
             case SchematicTableBlockEntity.STATUS_UPLOADING -> "VALIDATING / UPLOADING";
             case SchematicTableBlockEntity.STATUS_FINISHED -> "CARD WRITTEN";
             case SchematicTableBlockEntity.STATUS_ERROR -> "UPLOAD REJECTED";
-            default -> "INSERT A SCHEMATIC CARD";
+            default -> "INSERT A CREATOR CARD";
         };
     }
 

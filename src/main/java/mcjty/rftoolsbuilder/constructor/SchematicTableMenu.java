@@ -32,7 +32,7 @@ public final class SchematicTableMenu extends AbstractContainerMenu {
 
         if (table != null) {
             addSlot(new Slot(table, SchematicTableBlockEntity.SLOT_INPUT, 25, 64) {
-                @Override public boolean mayPlace(ItemStack stack) { return stack.getItem() instanceof SchematicCardItem && !table.isUploading(); }
+                @Override public boolean mayPlace(ItemStack stack) { return SchematicTableBlockEntity.isWritableInput(stack) && !table.isUploading(); }
                 @Override public boolean mayPickup(Player player) { return !table.isUploading(); }
                 @Override public int getMaxStackSize() { return 1; }
             });
@@ -74,7 +74,7 @@ public final class SchematicTableMenu extends AbstractContainerMenu {
 
         if (index < machineSlots) {
             if (!moveItemStackTo(source, machineSlots, slots.size(), true)) return ItemStack.EMPTY;
-        } else if (source.getItem() instanceof SchematicCardItem) {
+        } else if (SchematicTableBlockEntity.isWritableInput(source)) {
             if (!moveItemStackTo(source, 0, 1, false)) return ItemStack.EMPTY;
         } else {
             return ItemStack.EMPTY;

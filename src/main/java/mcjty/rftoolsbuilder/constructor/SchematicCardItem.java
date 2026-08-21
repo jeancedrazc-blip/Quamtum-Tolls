@@ -128,6 +128,22 @@ public final class SchematicCardItem extends Item {
         return Math.max(0, Math.min(MAX_REPLACEMENTS, root(stack).getIntOr(P + "ReplacementCount", 0)));
     }
 
+    /**
+     * Stable signature for preview content. Placement fields are deliberately
+     * excluded so moving a card never forces the schematic file to be parsed
+     * again or makes the hologram flicker while the server confirms an anchor.
+     */
+    public static int replacementSignature(ItemStack stack) {
+        CompoundTag tag = root(stack);
+        int count = Math.max(0, Math.min(MAX_REPLACEMENTS, tag.getIntOr(P + "ReplacementCount", 0)));
+        int hash = count;
+        for (int i = 0; i < count; i++) {
+            hash = 31 * hash + tag.getString(P + "ReplacementFrom" + i).orElse("").hashCode();
+            hash = 31 * hash + tag.getString(P + "ReplacementTo" + i).orElse("").hashCode();
+        }
+        return hash;
+    }
+
     public static boolean addReplacement(ItemStack stack, Block from, Block to) {
         Identifier fromId = BuiltInRegistries.BLOCK.getKey(from);
         Identifier toId = BuiltInRegistries.BLOCK.getKey(to);

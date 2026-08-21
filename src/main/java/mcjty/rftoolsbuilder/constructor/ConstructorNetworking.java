@@ -57,7 +57,14 @@ public final class ConstructorNetworking {
         if (!(stack.getItem() instanceof SchematicCardItem) || !SchematicCardItem.hasSource(stack) || !SchematicCardItem.hasBounds(stack)) return;
         String expectedHash = SchematicCardItem.sha256(stack);
         if (!expectedHash.isBlank() && !expectedHash.equals(payload.sha256())) return;
-        SchematicCardItem.setDeployment(stack, payload.anchor(), payload.rotation(), payload.mirror(), payload.deployed());
+        BlockPos anchor = payload.deployed() ? payload.anchor() : BlockPos.ZERO;
+        if (payload.deployed()) {
+            if (Math.abs((long) anchor.getX()) > 30_000_000L || Math.abs((long) anchor.getZ()) > 30_000_000L) return;
+            if (anchor.getY() < -2048 || anchor.getY() > 2048) return;
+            double allowed = 96.0 + Math.max(SchematicCardItem.sizeX(stack), SchematicCardItem.sizeZ(stack));
+            if (player.distanceToSqr(anchor.getX() + .5, anchor.getY() + .5, anchor.getZ() + .5) > allowed * allowed) return;
+        }
+        SchematicCardItem.setDeployment(stack, anchor, payload.rotation(), payload.mirror(), payload.deployed());
         player.getInventory().setChanged();
     }
 

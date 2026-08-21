@@ -1,6 +1,7 @@
 {
   "block.rftoolsbuilder.constructor": "Construtora",
   "block.rftoolsbuilder.schematic_table": "Mesa de Schematic",
+  "item.rftoolsbuilder.schematic_creator_card": "Cartão Criador de Schematic",
   "item.rftoolsbuilder.schematic_card": "Cartão de Schematic",
   "screen.rftoolsbuilder.schematic_placement": "Posicionamento do Schematic",
   "screen.rftoolsbuilder.placement.size": "Tamanho: %s × %s × %s",

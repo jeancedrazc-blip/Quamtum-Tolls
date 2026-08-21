@@ -50,9 +50,10 @@ public final class SchematicPlacementHandler {
     private static int loadGeneration;
     private static ConstructionPlan plan;
     private static BlockSubstitutionRules substitutions = new BlockSubstitutionRules();
-    private static int lastCardComponentsHash;
+    private static int loadedReplacementSignature;
 
     private static boolean editing;
+    private static boolean followingLook;
     private static BlockPos editAnchor = BlockPos.ZERO;
     private static int editRotation;
     private static int editMirror;
@@ -97,11 +98,14 @@ public final class SchematicPlacementHandler {
      * player's target. A click freezes this transient transform onto the card.
      */
     private static void updateUndeployedPreview(ItemStack card, Minecraft mc) {
-        if (SchematicCardItem.deployed(card) || plan == null) return;
+        if (SchematicCardItem.deployed(card) || plan == null) {
+            followingLook = false;
+            return;
+        }
         editRotation = SchematicCardItem.rotation(card);
         editMirror = SchematicCardItem.mirror(card);
         editAnchor = anchorForTarget(previewTarget(mc));
-        editing = true;
+        followingLook = true;
         tool = SchematicPlacementTool.DEPLOY;
     }
 
@@ -255,8 +259,7 @@ public final class SchematicPlacementHandler {
             editAnchor = SchematicCardItem.anchor(card);
             tool = SchematicPlacementTool.MOVE_XZ;
         } else {
-            BlockPos target = lookTarget(mc);
-            editAnchor = target != null ? anchorForTarget(target) : centeredInFront(mc, 4);
+            editAnchor = anchorForTarget(previewTarget(mc));
             tool = SchematicPlacementTool.DEPLOY;
         }
 
@@ -264,6 +267,7 @@ public final class SchematicPlacementHandler {
         resetRotation = editRotation;
         resetMirror = editMirror;
         editing = true;
+        followingLook = false;
         MODEL_CACHE.clear();
     }
 
@@ -457,6 +461,7 @@ public final class SchematicPlacementHandler {
 
         syncDeployment(card, true);
         editing = false;
+        followingLook = false;
         MODEL_CACHE.clear();
         return true;
     }
@@ -467,12 +472,14 @@ public final class SchematicPlacementHandler {
 
         syncDeployment(card, false);
         editing = false;
+        followingLook = true;
         MODEL_CACHE.clear();
         return true;
     }
 
     public static void cancel() {
         editing = false;
+        followingLook = false;
         MODEL_CACHE.clear();
     }
 
@@ -521,12 +528,12 @@ public final class SchematicPlacementHandler {
     }
 
     private static void ensurePlan(ItemStack card) {
-        int componentHash = card.getComponentsPatch().hashCode();
         String key = SchematicCardItem.clientFile(card) + "|" + SchematicCardItem.sourceType(card) + "|" + SchematicCardItem.sha256(card);
-        if (key.equals(loadedKey) && componentHash == lastCardComponentsHash) return;
+        int replacementSignature = SchematicCardItem.replacementSignature(card);
+        if (key.equals(loadedKey) && replacementSignature == loadedReplacementSignature) return;
 
         loadedKey = key;
-        lastCardComponentsHash = componentHash;
+        loadedReplacementSignature = replacementSignature;
         plan = null;
         MODEL_CACHE.clear();
         substitutions = new BlockSubstitutionRules();
@@ -565,11 +572,11 @@ public final class SchematicPlacementHandler {
         ItemStack card = currentCard(mc);
         if (!isWrittenCard(card)) return;
 
-        SchematicTransform transform = editing
+        SchematicTransform transform = (editing || followingLook)
                 ? new SchematicTransform(editAnchor, editRotation, editMirror, plan.sizeX(), plan.sizeY(), plan.sizeZ())
                 : SchematicCardItem.transform(card);
 
-        if (!editing && !SchematicCardItem.deployed(card)) return;
+        if (!editing && !followingLook && !SchematicCardItem.deployed(card)) return;
 
         var pose = event.getPoseStack();
         var collector = event.getSubmitNodeCollector();
@@ -591,10 +598,16 @@ public final class SchematicPlacementHandler {
             pose.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
             pose.translate(.01, .01, .01);
             pose.scale(.98f, .98f, .98f);
-            int blockLight = mc.level.getBrightness(LightLayer.BLOCK, worldPos);
-            int skyLight = mc.level.getBrightness(LightLayer.SKY, worldPos);
-            int packedLight = LightCoordsUtil.pack(blockLight, skyLight);
-            // NeoForge 26.1's reference SubmitCustomGeometryEvent renderer passes 0 here.\n            // -1 is interpreted as an overlay by shader pipelines and can wash out\n            // the entire frame for a large schematic.\n            renderState.submit(pose, collector, packedLight, OverlayTexture.NO_OVERLAY, 0);
+            int packedLight = LightCoordsUtil.FULL_BRIGHT;
+            if (mc.level.hasChunkAt(worldPos)) {
+                int blockLight = mc.level.getBrightness(LightLayer.BLOCK, worldPos);
+                int skyLight = mc.level.getBrightness(LightLayer.SKY, worldPos);
+                packedLight = LightCoordsUtil.pack(blockLight, skyLight);
+            }
+            // NeoForge 26.1's reference SubmitCustomGeometryEvent renderer passes
+            // zero as the final shader argument. Using -1 here washes out large
+            // previews, especially with shader packs.
+            renderState.submit(pose, collector, packedLight, OverlayTexture.NO_OVERLAY, 0);
             pose.popPose();
         }
     }
@@ -614,6 +627,7 @@ public final class SchematicPlacementHandler {
             plan = null;
             MODEL_CACHE.clear();
             editing = false;
+            followingLook = false;
             ++loadGeneration;
         }
     }

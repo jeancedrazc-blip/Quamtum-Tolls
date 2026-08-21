@@ -65,8 +65,16 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
 
     public boolean canStartUpload(Player player) {
         return !isUploading() && pendingInput.isEmpty() && outputCard().isEmpty()
-                && inputCard().getItem() instanceof SchematicCardItem
+                && isWritableInput(inputCard())
                 && player.distanceToSqr(worldPosition.getX() + .5, worldPosition.getY() + .5, worldPosition.getZ() + .5) <= 64.0;
+    }
+
+    public static boolean isWritableInput(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        if (stack.getItem() instanceof SchematicCreatorCardItem) return true;
+        // Compatibility for blank cards created by builds before the orange
+        // creator card became a separate item.
+        return stack.getItem() instanceof SchematicCardItem && !SchematicCardItem.hasSource(stack);
     }
 
     public boolean beginUpload(Player player, String displayName) {
@@ -97,8 +105,7 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
     public void finishUpload(String displayName, String serverRelativeFile, String clientRelativeFile,
                              String formatId, String sha256, int sizeX, int sizeY, int sizeZ) {
         if (!isUploading() || pendingInput.isEmpty()) return;
-        ItemStack result = pendingInput.copy();
-        result.setCount(1);
+        ItemStack result = new ItemStack(ConstructorBootstrap.SCHEMATIC_CARD.get());
         SchematicCardItem.setSource(result, displayName, serverRelativeFile, clientRelativeFile,
                 formatId, sha256, sizeX, sizeY, sizeZ);
         items.set(SLOT_OUTPUT, result);
@@ -127,7 +134,7 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
 
     private int statusForContents() {
         if (!outputCard().isEmpty()) return STATUS_FINISHED;
-        return inputCard().getItem() instanceof SchematicCardItem ? STATUS_READY : STATUS_NO_CARD;
+        return isWritableInput(inputCard()) ? STATUS_READY : STATUS_NO_CARD;
     }
 
     private void refreshIdleStatus() {
@@ -209,7 +216,7 @@ public final class SchematicTableBlockEntity extends BlockEntity implements Cont
     @Override
     public void setItem(int slot, ItemStack stack) {
         if (slot < 0 || slot >= TOTAL_SLOTS || isUploading()) return;
-        if (slot == SLOT_INPUT && !stack.isEmpty() && !(stack.getItem() instanceof SchematicCardItem)) return;
+        if (slot == SLOT_INPUT && !stack.isEmpty() && !isWritableInput(stack)) return;
         if (slot == SLOT_OUTPUT && !stack.isEmpty()) return;
         items.set(slot, stack);
         if (!stack.isEmpty() && stack.getCount() > 1) stack.setCount(1);

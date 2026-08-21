@@ -1,7 +1,8 @@
 {
   "variants": {
-    "": {
-      "model": "rftoolsbuilder:block/builder"
-    }
+    "facing=north": { "model": "rftoolsbuilder:block/builder" },
+    "facing=east":  { "model": "rftoolsbuilder:block/builder", "y": 90 },
+    "facing=south": { "model": "rftoolsbuilder:block/builder", "y": 180 },
+    "facing=west":  { "model": "rftoolsbuilder:block/builder", "y": 270 }
   }
 }

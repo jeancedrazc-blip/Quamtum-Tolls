@@ -58,6 +58,21 @@ public final class ConstructorBootstrap {
             Block::new,
             props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
     );
+    public static final DeferredBlock<Block> CONSTRUCTOR_BEAM_VISUAL = BLOCKS.registerBlock(
+            "constructor_beam_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 15)
+    );
+    public static final DeferredBlock<Block> CONSTRUCTOR_RING_VISUAL = BLOCKS.registerBlock(
+            "constructor_ring_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 15)
+    );
+    public static final DeferredBlock<Block> CONSTRUCTOR_TARGET_FRAME_VISUAL = BLOCKS.registerBlock(
+            "constructor_target_frame_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
+    );
 
     public static final DeferredBlock<SchematicTableBlock> SCHEMATIC_TABLE = BLOCKS.registerBlock(
             "schematic_table",

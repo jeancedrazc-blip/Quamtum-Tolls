@@ -98,8 +98,22 @@ public final class SchematicPlacementHandler {
 
         event.setCanceled(true);
         ensurePlan(card);
-        beginEditing(card, mc);
-        mc.setScreen(new SchematicPlacementScreen());
+
+        // Create-style interaction without a dedicated key binding:
+        // first use deploys directly into the world and keeps the hologram
+        // active. A deployed card only opens its editor deliberately.
+        if (!SchematicCardItem.deployed(card)) {
+            beginEditing(card, mc);
+            if (confirm()) {
+                message("Schematic positioned — sneak + right-click to edit");
+            }
+            return;
+        }
+
+        if (mc.player.isShiftKeyDown()) {
+            beginEditing(card, mc);
+            mc.setScreen(new SchematicPlacementScreen());
+        }
     }
 
     private static void beginEditing(ItemStack card, Minecraft mc) {

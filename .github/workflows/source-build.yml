@@ -6,6 +6,7 @@ on:
       - "source/3.0.6-dev.9-placement-editor-v5sync"
       - "source/3.0.6-dev.10-complete-reconstruction"
       - "feature/schematic-create-parity-ui"
+      - "feature/full-legacy-reconstruction"
   pull_request:
     branches:
       - "main"

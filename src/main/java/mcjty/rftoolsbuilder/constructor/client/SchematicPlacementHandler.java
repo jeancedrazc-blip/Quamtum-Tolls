@@ -15,6 +15,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -590,10 +591,10 @@ public final class SchematicPlacementHandler {
             pose.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
             pose.translate(.01, .01, .01);
             pose.scale(.98f, .98f, .98f);
-            // Opaque white is required as the base color. Passing zero makes
-            // tinted/cutout quads (leaves, grass and several modded models)
-            // transparent or black.
-            renderState.submit(pose, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, -1);
+            int blockLight = mc.level.getBrightness(LightLayer.BLOCK, worldPos);
+            int skyLight = mc.level.getBrightness(LightLayer.SKY, worldPos);
+            int packedLight = LightCoordsUtil.pack(blockLight, skyLight);
+            renderState.submit(pose, collector, packedLight, OverlayTexture.NO_OVERLAY, -1);
             pose.popPose();
         }
     }

@@ -115,7 +115,7 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         QuantumUiTheme.sectionHeader(gui, font, Component.literal("BUILD CONTROL"), x + 12, y + 137, 248);
         QuantumUiTheme.sectionHeader(gui, font, Component.literal("PLACEMENT POLICY"), x + 12, y + 164, 248);
 
-        QuantumUiTheme.slotFrame(gui, x + 112, y + 116, menu.data().get(8) != 0, QuantumUiTheme.CYAN);
+        QuantumUiTheme.slotFrame(gui, x + 162, y + 110, menu.data().get(8) != 0, QuantumUiTheme.CYAN);
 
         // Machine controls end at y=203. Keep a hard visual separation before
         // the first vanilla inventory row at y=208 so widgets never overlap slots.
@@ -160,16 +160,16 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
                 x + 96, y + 94, QuantumUiTheme.TEXT_SOFT, false);
 
         String card = cardName();
-        gui.text(font, Component.literal("CARD"), x + 96, y + 108, QuantumUiTheme.MUTED, false);
-        gui.text(font, Component.literal(trim(card, 15)), x + 136, y + 108, QuantumUiTheme.TEXT, false);
+        gui.text(font, Component.literal("CARD"), x + 96, y + 106, QuantumUiTheme.MUTED, false);
+        gui.text(font, Component.literal(trim(card, 10)), x + 96, y + 118, QuantumUiTheme.TEXT, false);
 
         if (state == ConstructorStatus.FIRING) {
             int shotPct = Math.min(100, shot * 100 / flightTicks);
-            gui.text(font, Component.literal("PROJECTILE " + shotPct + "%"), x + 96, y + 122, QuantumUiTheme.GREEN, false);
+            gui.text(font, Component.literal("PROJECTILE " + shotPct + "%"), x + 96, y + 130, QuantumUiTheme.GREEN, false);
         } else {
             int rules = replacementCount();
             gui.text(font, Component.literal(rules == 0 ? "no substitution rules" : rules + " substitution rule" + (rules == 1 ? "" : "s")),
-                    x + 96, y + 122, rules == 0 ? QuantumUiTheme.MUTED : QuantumUiTheme.AMBER, false);
+                    x + 96, y + 130, rules == 0 ? QuantumUiTheme.MUTED : QuantumUiTheme.AMBER, false);
         }
     }
 

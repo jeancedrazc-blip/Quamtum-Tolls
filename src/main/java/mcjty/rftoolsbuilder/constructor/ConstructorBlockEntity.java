@@ -20,6 +20,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -346,6 +347,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             case 7 -> {
                 if (running || shotReserved || !(schematicCard().getItem() instanceof SchematicCardItem)) yield false;
                 SchematicCardItem.clearReplacements(schematicCard());
+                refreshMaterialTablet();
                 setChangedAndSync();
                 yield true;
             }
@@ -359,12 +361,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 || !SchematicCardItem.hasSource(schematicCard())) return false;
         try {
             ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
-            java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
-            for (var entry : plan.entries()) {
-                String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK
-                        .getKey(entry.sourceState().getBlock()).toString();
-                counts.merge(id, 1, Integer::sum);
-            }
+            java.util.Map<String, Integer> counts = materialCounts(plan);
             net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
             tag.putString("QTSchematicName", SchematicCardItem.sourceName(schematicCard()));
             tag.putInt("QTMaterialKinds", counts.size());
@@ -382,6 +379,37 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         } catch (IOException | RuntimeException ignored) {
             return false;
         }
+    }
+
+    void refreshMaterialTablet() {
+        ItemStack tablet = !tabletOutput().isEmpty() ? tabletOutput() : tabletInput();
+        if (!(tablet.getItem() instanceof MaterialListTabletItem) || !MaterialListTabletItem.isWritten(tablet)
+                || !SchematicCardItem.hasSource(schematicCard())) return;
+        try {
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
+            java.util.Map<String, Integer> counts = materialCounts(plan);
+            net.minecraft.nbt.CompoundTag tag = tablet.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA).copyTag();
+            tag.putInt("QTMaterialKinds", counts.size());
+            tag.putInt("QTMaterialTotal", plan.blockCount());
+            StringBuilder encoded = new StringBuilder();
+            counts.forEach((id, count) -> encoded.append(id).append('=').append(count).append(';'));
+            tag.putString("QTMaterials", encoded.toString());
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+        } catch (IOException | RuntimeException ignored) {
+        }
+    }
+
+    private java.util.Map<String, Integer> materialCounts(ConstructionPlan plan) {
+        java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+        for (var entry : plan.entries()) {
+            Block source = entry.sourceState().getBlock();
+            Block replacement = SchematicCardItem.replacementFor(schematicCard(), source);
+            Block effective = replacement == null ? source : replacement;
+            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(effective).toString();
+            counts.merge(id, 1, Integer::sum);
+        }
+        return counts;
     }
 
     public static void tick(Level level, BlockPos pos, BlockState blockState, ConstructorBlockEntity be) {

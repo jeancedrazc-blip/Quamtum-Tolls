@@ -154,8 +154,20 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
                         menu.getSlot(slot).hasItem(), QuantumUiTheme.CYAN);
             }
         }
-        gui.text(font, Component.literal("HOLD BLOCK + CLICK MATERIAL"), x + 68, y + 132,
+        gui.text(font, Component.literal("CLICK A MATERIAL TO REPLACE"), x + 68, y + 132,
                 QuantumUiTheme.MUTED, false);
+
+        if (menu.selectedMaterial() >= 0) {
+            QuantumUiTheme.panel(gui, x + 99, y + 73, x + 173, y + 130,
+                    QuantumUiTheme.AMBER, QuantumUiTheme.SURFACE_2);
+            gui.text(font, Component.literal("MATERIAL FILTER"),
+                    x + 104, y + 79, QuantumUiTheme.TEXT, false);
+            gui.text(font, Component.literal("REPLACE WITH"), x + 104, y + 89,
+                    QuantumUiTheme.AMBER, false);
+            QuantumUiTheme.slotFrame(gui, x + 127, y + 96, menu.getSlot(24).hasItem(), QuantumUiTheme.AMBER);
+            gui.text(font, Component.literal("CLICK SLOT WITH BLOCK"), x + 102, y + 117,
+                    QuantumUiTheme.MUTED, false);
+        }
 
         // Tablet writer rail: blank input, animated transfer path and output.
         QuantumUiTheme.panel(gui, x + 230, y + 31, x + 262, y + 138);

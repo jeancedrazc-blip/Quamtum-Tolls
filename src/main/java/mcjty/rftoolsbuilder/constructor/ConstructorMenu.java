@@ -7,6 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -17,7 +18,9 @@ public final class ConstructorMenu extends AbstractContainerMenu {
     private final ConstructorBlockEntity constructor;
     private final ContainerData data;
     private final SimpleContainer materialDisplay = new SimpleContainer(21);
+    private final SimpleContainer replacementFilter = new SimpleContainer(1);
     private final java.util.List<Block> materialSources = new java.util.ArrayList<>(21);
+    private final DataSlot selectedMaterial = DataSlot.standalone();
 
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
@@ -60,6 +63,12 @@ public final class ConstructorMenu extends AbstractContainerMenu {
                     });
                 }
             }
+            addSlot(new Slot(replacementFilter, 0, 127, 96) {
+                @Override public boolean mayPlace(ItemStack stack) { return stack.getItem() instanceof BlockItem; }
+                @Override public boolean mayPickup(Player player) { return false; }
+                @Override public int getMaxStackSize() { return 1; }
+                @Override public boolean isActive() { return selectedMaterial.get() >= 0; }
+            });
         }
 
         int invX = 48;
@@ -69,6 +78,8 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         }
         for (int col = 0; col < 9; col++) addSlot(new Slot(inventory, col, invX + col * 18, invY + 58));
         addDataSlots(data);
+        selectedMaterial.set(-1);
+        addDataSlot(selectedMaterial);
     }
 
     private void populateMaterialDisplay(ItemStack card) {
@@ -94,28 +105,63 @@ public final class ConstructorMenu extends AbstractContainerMenu {
 
     public ConstructorBlockEntity constructor() { return constructor; }
     public ContainerData data() { return data; }
+    public int selectedMaterial() { return selectedMaterial.get(); }
+    public ItemStack selectedSource() {
+        int selected = selectedMaterial.get();
+        return selected >= 0 && selected < materialSources.size()
+                ? new ItemStack(materialSources.get(selected)) : ItemStack.EMPTY;
+    }
 
     @Override
     public void clicked(int slotId, int button, ContainerInput clickType, Player player) {
         if (slotId >= 3 && slotId < 24 && clickType == ContainerInput.PICKUP && constructor != null) {
             int materialIndex = slotId - 3;
-            ItemStack filter = getCarried();
-            if (materialIndex < materialSources.size() && filter.getItem() instanceof BlockItem blockItem) {
-                Block source = materialSources.get(materialIndex);
-                if (SchematicCardItem.addReplacement(constructor.schematicCard(), source, blockItem.getBlock())) {
-                    materialDisplay.setItem(materialIndex, new ItemStack(blockItem.getBlock()));
-                    constructor.setChangedAndSync();
-                }
+            if (materialIndex < materialSources.size()) {
+                if (selectedMaterial.get() == materialIndex) {
+                    selectedMaterial.set(-1);
+                    replacementFilter.clearContent();
+                } else selectMaterial(materialIndex);
+            }
+            return;
+        }
+        if (slotId == 24 && clickType == ContainerInput.PICKUP && constructor != null
+                && selectedMaterial.get() >= 0 && selectedMaterial.get() < materialSources.size()) {
+            int selected = selectedMaterial.get();
+            Block source = materialSources.get(selected);
+            ItemStack carried = getCarried();
+            boolean changed;
+            if (carried.getItem() instanceof BlockItem blockItem) {
+                changed = blockItem.getBlock() == source
+                        ? SchematicCardItem.removeReplacement(constructor.schematicCard(), source)
+                        : SchematicCardItem.addReplacement(constructor.schematicCard(), source, blockItem.getBlock());
+            } else if (carried.isEmpty()) {
+                changed = SchematicCardItem.removeReplacement(constructor.schematicCard(), source);
+            } else return;
+            if (changed) {
+                selectMaterial(selected);
+                constructor.refreshMaterialTablet();
+                constructor.setChangedAndSync();
             }
             return;
         }
         super.clicked(slotId, button, clickType, player);
     }
 
+    private void selectMaterial(int index) {
+        selectedMaterial.set(index);
+        Block source = materialSources.get(index);
+        Block replacement = SchematicCardItem.replacementFor(constructor.schematicCard(), source);
+        replacementFilter.setItem(0, new ItemStack((replacement == null ? source : replacement).asItem()));
+    }
+
     @Override
     public boolean clickMenuButton(Player player, int id) {
         if (constructor == null || !constructor.handleMenuButton(id)) return false;
-        if (id == 7) populateMaterialDisplay(constructor.schematicCard());
+        if (id == 7) {
+            populateMaterialDisplay(constructor.schematicCard());
+            int selected = selectedMaterial.get();
+            if (selected >= 0 && selected < materialSources.size()) selectMaterial(selected);
+        }
         return true;
     }
 
@@ -126,7 +172,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         if (!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack source = slot.getItem();
         ItemStack copy = source.copy();
-        int machineSlots = constructor == null ? 0 : 24;
+        int machineSlots = constructor == null ? 0 : 25;
 
         if (index < machineSlots) {
             if (constructor != null && !constructor.canRemoveCard()) return ItemStack.EMPTY;

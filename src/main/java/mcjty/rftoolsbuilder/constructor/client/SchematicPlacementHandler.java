@@ -88,6 +88,20 @@ public final class SchematicPlacementHandler {
         }
 
         ensurePlan(card);
+        updateUndeployedPreview(card, mc);
+    }
+
+    /**
+     * Create's Deploy Tool renders before placement and continuously chases the
+     * player's target. A click freezes this transient transform onto the card.
+     */
+    private static void updateUndeployedPreview(ItemStack card, Minecraft mc) {
+        if (SchematicCardItem.deployed(card) || plan == null) return;
+        editRotation = SchematicCardItem.rotation(card);
+        editMirror = SchematicCardItem.mirror(card);
+        editAnchor = anchorForTarget(previewTarget(mc));
+        editing = true;
+        tool = SchematicPlacementTool.DEPLOY;
     }
 
     private static void onMouseButton(InputEvent.MouseButton.Pre event) {
@@ -480,6 +494,18 @@ public final class SchematicPlacementHandler {
         return hit.getBlockPos().relative(hit.getDirection());
     }
 
+    private static BlockPos previewTarget(Minecraft mc) {
+        BlockPos hit = lookTarget(mc);
+        if (hit != null) return hit;
+        if (mc.player == null) return BlockPos.ZERO;
+        int range = Math.max(3, Math.min(24,
+                (int) Math.ceil(Math.sqrt(
+                        transformedSizeX() * transformedSizeX()
+                                + transformedSizeZ() * transformedSizeZ()) / 2.0)));
+        Vec3 target = mc.player.getEyePosition().add(mc.player.getLookAngle().scale(range));
+        return BlockPos.containing(target);
+    }
+
     private static void syncDeployment(ItemStack card, boolean deployed) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
@@ -564,7 +590,10 @@ public final class SchematicPlacementHandler {
             pose.translate(worldPos.getX() - camera.x, worldPos.getY() - camera.y, worldPos.getZ() - camera.z);
             pose.translate(.01, .01, .01);
             pose.scale(.98f, .98f, .98f);
-            renderState.submit(pose, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+            // Opaque white is required as the base color. Passing zero makes
+            // tinted/cutout quads (leaves, grass and several modded models)
+            // transparent or black.
+            renderState.submit(pose, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, -1);
             pose.popPose();
         }
     }

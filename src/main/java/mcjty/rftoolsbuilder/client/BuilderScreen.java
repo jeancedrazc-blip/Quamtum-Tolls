@@ -149,7 +149,6 @@ public class BuilderScreen extends AbstractContainerScreen<BuilderMenu> {
         gui.text(font, Component.literal(compact(done) + " / " + compact(total)), x + 184, y + 135, QuantumUiTheme.TEXT_SOFT, false);
 
         gui.fill(x + 8, y + 144, x + imageWidth - 8, y + 145, QuantumUiTheme.BORDER_DIM);
-        gui.text(font, Component.literal("PLAYER INVENTORY"), x + 47, y + 139, QuantumUiTheme.MUTED, false);
     }
 
     private static Component statusText(int status) {

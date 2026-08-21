@@ -19,6 +19,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
@@ -65,6 +67,7 @@ public final class SchematicPlacementHandler {
         installed = true;
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onClientTick);
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onMouseButton);
+        NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onMouseScroll);
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onSubmitGeometry);
     }
 
@@ -113,6 +116,119 @@ public final class SchematicPlacementHandler {
         if (mc.player.isShiftKeyDown()) {
             beginEditing(card, mc);
             mc.setScreen(new SchematicPlacementScreen());
+        }
+    }
+
+    /**
+     * Create-style in-world tool manipulation. The selected tool remains active
+     * after the editor closes and the wheel edits the deployed hologram without
+     * reopening a blocking screen.
+     */
+    private static void onMouseScroll(InputEvent.MouseScrollingEvent event) {
+        int amount = event.getAccumulatedScrollY();
+        if (amount == 0) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null || mc.screen != null) return;
+        ItemStack card = currentCard(mc);
+        if (!isWrittenCard(card) || !SchematicCardItem.deployed(card)) return;
+
+        DirectionFace face = selectedBoundsFace(mc, card);
+        SchematicPlacementTool activeTool = tool;
+        boolean handled = false;
+        beginEditing(card, mc);
+        tool = activeTool;
+
+        switch (tool) {
+            case MOVE_XZ -> {
+                if (face != null && face.horizontal()) {
+                    nudge(-face.x() * Integer.signum(amount), 0,
+                            -face.z() * Integer.signum(amount));
+                    handled = true;
+                }
+            }
+            case MOVE_Y -> {
+                nudge(0, Integer.signum(amount), 0);
+                handled = true;
+            }
+            case ROTATE -> {
+                rotate90(amount > 0);
+                handled = true;
+            }
+            case MIRROR -> {
+                if (face != null && face.horizontal()) {
+                    boolean localX = face.x() != 0;
+                    if ((editRotation & 1) != 0) localX = !localX;
+                    if (localX) flipX(); else flipZ();
+                    handled = true;
+                }
+            }
+            default -> {
+            }
+        }
+
+        if (handled) {
+            syncDeployment(card, true);
+            editing = false;
+            event.setCanceled(true);
+        } else {
+            editing = false;
+        }
+    }
+
+    private static DirectionFace selectedBoundsFace(Minecraft mc, ItemStack card) {
+        if (mc.player == null) return null;
+        SchematicTransform transform = SchematicCardItem.transform(card);
+        AABB bounds = new AABB(
+                transform.anchor().getX(), transform.anchor().getY(), transform.anchor().getZ(),
+                transform.anchor().getX() + Math.max(1, transform.transformedSizeX()),
+                transform.anchor().getY() + Math.max(1, transform.sizeY()),
+                transform.anchor().getZ() + Math.max(1, transform.transformedSizeZ()));
+        Vec3 start = mc.player.getEyePosition();
+        Vec3 direction = mc.player.getLookAngle();
+        return rayFace(bounds, start, direction, 75.0);
+    }
+
+    private static DirectionFace rayFace(AABB box, Vec3 start, Vec3 direction, double range) {
+        double near = 0.0;
+        double far = range;
+        DirectionFace hitFace = null;
+        double[] origins = {start.x, start.y, start.z};
+        double[] directions = {direction.x, direction.y, direction.z};
+        double[] mins = {box.minX, box.minY, box.minZ};
+        double[] maxs = {box.maxX, box.maxY, box.maxZ};
+
+        for (int axis = 0; axis < 3; axis++) {
+            double d = directions[axis];
+            if (Math.abs(d) < 1.0e-7) {
+                if (origins[axis] < mins[axis] || origins[axis] > maxs[axis]) return null;
+                continue;
+            }
+            double t1 = (mins[axis] - origins[axis]) / d;
+            double t2 = (maxs[axis] - origins[axis]) / d;
+            DirectionFace entering = DirectionFace.forAxis(axis, d > 0 ? -1 : 1);
+            if (t1 > t2) {
+                double swap = t1; t1 = t2; t2 = swap;
+                entering = DirectionFace.forAxis(axis, d > 0 ? 1 : -1);
+            }
+            if (t1 > near) {
+                near = t1;
+                hitFace = entering;
+            }
+            far = Math.min(far, t2);
+            if (near > far) return null;
+        }
+        return near <= range ? hitFace : null;
+    }
+
+    private record DirectionFace(int x, int y, int z) {
+        boolean horizontal() { return y == 0; }
+        static DirectionFace forAxis(int axis, int sign) {
+            return switch (axis) {
+                case 0 -> new DirectionFace(sign, 0, 0);
+                case 1 -> new DirectionFace(0, sign, 0);
+                default -> new DirectionFace(0, 0, sign);
+            };
         }
     }
 
@@ -275,12 +391,12 @@ public final class SchematicPlacementHandler {
 
     public static void flipX() {
         if (!editing) return;
-        setMirror(editMirror == 1 ? 0 : 1);
+        setMirror(editMirror == 2 ? 0 : 2);
     }
 
     public static void flipZ() {
         if (!editing) return;
-        setMirror(editMirror == 2 ? 0 : 2);
+        setMirror(editMirror == 1 ? 0 : 1);
     }
 
     public static void placeAtLook() {

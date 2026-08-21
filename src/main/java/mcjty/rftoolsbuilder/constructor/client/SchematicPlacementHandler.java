@@ -110,8 +110,8 @@ public final class SchematicPlacementHandler {
             editAnchor = SchematicCardItem.anchor(card);
             tool = SchematicPlacementTool.MOVE_XZ;
         } else {
-            BlockPos target = lookAnchor(mc);
-            editAnchor = target != null ? target : centeredInFront(mc, 4);
+            BlockPos target = lookTarget(mc);
+            editAnchor = target != null ? anchorForTarget(target) : centeredInFront(mc, 4);
             tool = SchematicPlacementTool.DEPLOY;
         }
 
@@ -212,8 +212,10 @@ public final class SchematicPlacementHandler {
         if (!editing) return;
         int x = localX;
         int z = localZ;
-        if (editMirror == 1) x = -x;
-        if (editMirror == 2) z = -z;
+        // Match vanilla/Create mirror semantics used by SchematicTransform:
+        // LEFT_RIGHT mirrors local Z, FRONT_BACK mirrors local X.
+        if (editMirror == 1) z = -z;
+        if (editMirror == 2) x = -x;
 
         int q = Math.floorMod(editRotation, 4);
         int wx;
@@ -228,6 +230,19 @@ public final class SchematicPlacementHandler {
     }
 
     public static void setRotation(int quarterTurns) {
+        if (!editing) return;
+        int target = Math.floorMod(quarterTurns, 4);
+        int delta = target - editRotation;
+        SchematicTransform rotated = new SchematicTransform(
+                editAnchor, editRotation, editMirror, sizeX(), sizeY(), sizeZ())
+                .rotateKeepingCenter(delta);
+        editAnchor = rotated.anchor();
+        editRotation = rotated.rotationQuarterTurns();
+        MODEL_CACHE.clear();
+    }
+
+    /** Used by the exact-coordinate editor where the entered anchor is authoritative. */
+    public static void setRotationAtAnchor(int quarterTurns) {
         if (!editing) return;
         editRotation = Math.floorMod(quarterTurns, 4);
         MODEL_CACHE.clear();
@@ -257,8 +272,8 @@ public final class SchematicPlacementHandler {
     public static void placeAtLook() {
         if (!editing) return;
         Minecraft mc = Minecraft.getInstance();
-        BlockPos target = lookAnchor(mc);
-        if (target != null) editAnchor = target;
+        BlockPos target = lookTarget(mc);
+        if (target != null) editAnchor = anchorForTarget(target);
     }
 
     public static void placeInFront() {
@@ -318,13 +333,19 @@ public final class SchematicPlacementHandler {
 
     private static BlockPos centeredInFront(Minecraft mc, int distance) {
         if (mc.player == null) return BlockPos.ZERO;
-        int sx = transformedSizeX();
-        int sz = transformedSizeZ();
         BlockPos center = mc.player.blockPosition().relative(mc.player.getDirection(), distance);
-        return center.offset(-sx / 2, 0, -sz / 2);
+        return anchorForTarget(center);
     }
 
-    private static BlockPos lookAnchor(Minecraft mc) {
+    /**
+     * Converts Create's deploy target (the horizontal center selected in the
+     * world) into the persisted minimum-corner anchor used by the printer.
+     */
+    private static BlockPos anchorForTarget(BlockPos target) {
+        return target.offset(-transformedSizeX() / 2, 0, -transformedSizeZ() / 2);
+    }
+
+    private static BlockPos lookTarget(Minecraft mc) {
         if (!(mc.hitResult instanceof BlockHitResult hit)) return null;
         return hit.getBlockPos().relative(hit.getDirection());
     }

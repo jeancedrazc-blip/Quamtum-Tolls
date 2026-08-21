@@ -7,17 +7,37 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStack;\nimport net.minecraft.core.component.DataComponents;\nimport net.minecraft.world.item.component.CustomData;\nimport net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.resources.Identifier;\nimport java.util.ArrayList;\nimport java.util.List;
 
 /** Tall glass-fronted material list UI based on the approved sketch. */
 public final class MaterialListTabletScreen extends Screen {
     private static final int PANEL_W = 246;
     private static final int PANEL_H = 286;
-    private final ItemStack tablet;
+    private final ItemStack tablet;\n    private final List<MaterialRow> rows = new ArrayList<>();\n    private String schematicName = "-";\n    private int total;
 
     public MaterialListTabletScreen(ItemStack tablet) {
         super(Component.literal("MATERIAL LIST TABLET"));
-        this.tablet = tablet;
+        this.tablet = tablet;\n        readTablet();
+    }
+
+    private void readTablet() {
+        CustomData data = tablet.get(DataComponents.CUSTOM_DATA);
+        if (data == null) return;
+        var tag = data.copyTag();
+        schematicName = tag.getString("QTSchematicName").orElse("-");
+        total = tag.getIntOr("QTMaterialTotal", 0);
+        String encoded = tag.getString("QTMaterials").orElse("");
+        for (String token : encoded.split(";")) {
+            int split = token.lastIndexOf('=');
+            if (split <= 0) continue;
+            try {
+                Identifier id = Identifier.parse(token.substring(0, split));
+                int count = Integer.parseInt(token.substring(split + 1));
+                var block = BuiltInRegistries.BLOCK.getValue(id);
+                rows.add(new MaterialRow(block.getName().getString(), count));
+            } catch (RuntimeException ignored) {
+            }
+        }
     }
 
     @Override
@@ -43,22 +63,33 @@ public final class MaterialListTabletScreen extends Screen {
         QuantumUiTheme.panel(gui, left + 11, top + 31, left + PANEL_W - 18, top + PANEL_H - 13,
                 QuantumUiTheme.BORDER, 0xFF071118);
 
-        gui.text(font, Component.literal(MaterialListTabletItem.isWritten(tablet) ? "SCHEMATIC MATERIALS" : "BLANK TABLET"),
+        gui.text(font, Component.literal(MaterialListTabletItem.isWritten(tablet) ? schematicName : "BLANK TABLET"),
                 left + 20, top + 42, QuantumUiTheme.CYAN, false);
         gui.text(font, Component.literal(MaterialListTabletItem.isWritten(tablet)
-                        ? "Material data is synchronized by the Constructor"
+                        ? total + " blocks · " + rows.size() + " material types"
                         : "Insert this tablet in the Constructor input"),
                 left + 20, top + 57, QuantumUiTheme.TEXT_SOFT, false);
 
-        // Textured list rows and reserved icon cells.
-        int rowY = top + 82;
+        QuantumUiTheme.panel(gui, left + 18, top + 68, left + 68, top + 82, QuantumUiTheme.CYAN, 0xFF0A2029);
+        gui.text(font, Component.literal("ALL"), left + 34, top + 71, QuantumUiTheme.CYAN, false);
+        QuantumUiTheme.panel(gui, left + 72, top + 68, left + 132, top + 82, QuantumUiTheme.BORDER_DIM, 0xFF0A151C);
+        gui.text(font, Component.literal("MISSING"), left + 79, top + 71, QuantumUiTheme.TEXT_SOFT, false);
+        QuantumUiTheme.panel(gui, left + 136, top + 68, left + 207, top + 82, QuantumUiTheme.BORDER_DIM, 0xFF0A151C);
+        gui.text(font, Component.literal("AVAILABLE"), left + 142, top + 71, QuantumUiTheme.TEXT_SOFT, false);
+
+        int rowY = top + 88;
         for (int row = 0; row < 8; row++) {
             int y = rowY + row * 22;
             QuantumUiTheme.panel(gui, left + 18, y, left + PANEL_W - 28, y + 19,
                     QuantumUiTheme.BORDER_DIM, row % 2 == 0 ? 0xFF0A1820 : 0xFF0C1C25);
-            QuantumUiTheme.slotFrame(gui, left + 21, y + 1, false, QuantumUiTheme.CYAN);
-            gui.fill(left + 47, y + 6, left + PANEL_W - 39, y + 8, 0xFF18333E);
-            gui.fill(left + 47, y + 11, left + PANEL_W - 62, y + 13, 0xFF102832);
+            QuantumUiTheme.slotFrame(gui, left + 21, y + 1, row < rows.size(), QuantumUiTheme.CYAN);
+            if (row < rows.size()) {
+                MaterialRow material = rows.get(row);
+                gui.text(font, Component.literal(trim(material.name(), 20)), left + 47, y + 4,
+                        QuantumUiTheme.TEXT, false);
+                gui.text(font, Component.literal("0 / " + material.required()), left + 47, y + 11,
+                        QuantumUiTheme.RED, false);
+            }
         }
 
         // Thin textured scrollbar from the sketch.
@@ -67,6 +98,12 @@ public final class MaterialListTabletScreen extends Screen {
         gui.fill(sx + 1, top + 36, sx + 3, top + 92, QuantumUiTheme.CYAN_DIM);
         gui.fill(sx + 1, top + 38, sx + 2, top + 90, QuantumUiTheme.CYAN);
     }
+
+    private static String trim(String value, int max) {
+        return value.length() <= max ? value : value.substring(0, max - 1) + "…";
+    }
+
+    private record MaterialRow(String name, int required) {}
 
     @Override
     public boolean isPauseScreen() {

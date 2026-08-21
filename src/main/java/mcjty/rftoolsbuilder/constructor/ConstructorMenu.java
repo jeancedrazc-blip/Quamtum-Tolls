@@ -5,15 +5,19 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerData;\nimport net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.BlockItem;\nimport net.minecraft.world.level.block.Block;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.level.block.Block;
 
 public final class ConstructorMenu extends AbstractContainerMenu {
     private final ConstructorBlockEntity constructor;
     private final ContainerData data;
-    private final SimpleContainer materialDisplay = new SimpleContainer(21);\n    private final java.util.List<Block> materialSources = new java.util.ArrayList<>(21);
+    private final SimpleContainer materialDisplay = new SimpleContainer(21);
+    private final java.util.List<Block> materialSources = new java.util.ArrayList<>(21);
 
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,

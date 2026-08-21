@@ -91,7 +91,7 @@ public final class SchematicExactTransformScreen extends Screen {
 
         validationError = "";
         SchematicPlacementHandler.setAnchor(new BlockPos(x, y, z));
-        SchematicPlacementHandler.setRotation(rotation);
+        SchematicPlacementHandler.setRotationAtAnchor(rotation);
         SchematicPlacementHandler.setMirror(mirror);
         back();
     }

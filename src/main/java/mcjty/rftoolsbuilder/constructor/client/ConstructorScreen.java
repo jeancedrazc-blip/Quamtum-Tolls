@@ -34,27 +34,22 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         int x = leftPos;
         int y = topPos;
 
-        startButton = addRenderableWidget(new QuantumButton(x + 12, y + 145, 72, 19,
+        startButton = addRenderableWidget(new QuantumButton(x + 54, y + 145, 54, 19,
                 Component.literal("▶ START"), () -> sendButton(2),
                 () -> menu.data().get(6) != 0, QuantumUiTheme.GREEN));
-        pauseButton = addRenderableWidget(new QuantumButton(x + 88, y + 145, 84, 19,
+        pauseButton = addRenderableWidget(new QuantumButton(x + 112, y + 145, 56, 19,
                 Component.literal("Ⅱ PAUSE"), () -> sendButton(0),
                 () -> status(menu.data().get(2)) == ConstructorStatus.PAUSED, QuantumUiTheme.AMBER));
-        stopButton = addRenderableWidget(new QuantumButton(x + 176, y + 145, 84, 19,
+        stopButton = addRenderableWidget(new QuantumButton(x + 172, y + 145, 54, 19,
                 Component.literal("■ STOP"), () -> sendButton(1),
                 () -> false, QuantumUiTheme.RED));
 
-        addModeButton(x + 12, y + 169, 57, "AIR ONLY", ConstructorReplaceMode.DONT_REPLACE);
-        addModeButton(x + 72, y + 169, 57, "SOLID", ConstructorReplaceMode.REPLACE_SOLID);
-        addModeButton(x + 132, y + 169, 57, "ANY", ConstructorReplaceMode.REPLACE_ANY);
-        addModeButton(x + 192, y + 169, 68, "+ AIR", ConstructorReplaceMode.REPLACE_EMPTY);
-
-        addRenderableWidget(new QuantumButton(x + 12, y + 188, 104, 15,
-                Component.literal("SKIP MISSING"), () -> sendButton(4),
-                () -> menu.data().get(10) != 0, QuantumUiTheme.AMBER));
-        addRenderableWidget(new QuantumButton(x + 120, y + 188, 140, 15,
-                Component.literal("REPLACE BLOCK ENTITIES"), () -> sendButton(5),
-                () -> menu.data().get(11) != 0, QuantumUiTheme.AMBER));
+        addRenderableWidget(new QuantumButton(x + 12, y + 176, 32, 18,
+                Component.literal("⚙"), () -> sendButton(3),
+                () -> false, QuantumUiTheme.AMBER));
+        addRenderableWidget(new QuantumButton(x + 230, y + 145, 32, 19,
+                Component.literal("WRITE"), () -> sendButton(6),
+                () -> false, QuantumUiTheme.GREEN));
     }
 
     private void addModeButton(int x, int y, int width, String label, ConstructorReplaceMode mode) {
@@ -101,24 +96,46 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         int y = topPos;
 
         QuantumUiTheme.window(gui, x, y, imageWidth, imageHeight);
-        QuantumUiTheme.title(gui, font, Component.literal("CONSTRUCTOR // BUILD TERMINAL"), x + imageWidth / 2, y + 8);
+        QuantumUiTheme.title(gui, font, Component.literal("CONSTRUCTOR"), x + imageWidth / 2, y + 8);
         gui.fill(x + 8, y + 23, x + imageWidth - 8, y + 24, QuantumUiTheme.BORDER_DIM);
 
-        QuantumUiTheme.panel(gui, x + 10, y + 31, x + 86, y + 138);
-        QuantumUiTheme.panel(gui, x + 90, y + 31, x + 190, y + 138);
-        QuantumUiTheme.panel(gui, x + 194, y + 31, x + 262, y + 138);
+        // Left rail: energy and schematic card.
+        QuantumUiTheme.panel(gui, x + 10, y + 31, x + 50, y + 138);
+        gui.text(font, Component.literal("FE"), x + 24, y + 38, QuantumUiTheme.MUTED, false);
+        QuantumUiTheme.verticalGauge(gui, x + 20, y + 51, 20, 76,
+                Math.max(0, menu.data().get(0)), Math.max(1, menu.data().get(1)), QuantumUiTheme.CYAN, 10);
+        gui.text(font, Component.literal("CARD"), x + 14, y + 143, QuantumUiTheme.MUTED, false);
+        QuantumUiTheme.slotFrame(gui, x + 22, y + 158, menu.data().get(8) != 0, QuantumUiTheme.CYAN);
 
-        drawEnergy(gui, x, y);
-        drawJob(gui, x, y);
-        drawTarget(gui, x, y);
+        // Large central region reserved for real schematic material icons.
+        QuantumUiTheme.panel(gui, x + 54, y + 31, x + 226, y + 138);
+        gui.text(font, Component.literal("MATERIALS IN SCHEMATIC"), x + 63, y + 39, QuantumUiTheme.CYAN, false);
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 7; col++) {
+                QuantumUiTheme.slotFrame(gui, x + 64 + col * 22, y + 55 + row * 25,
+                        false, QuantumUiTheme.CYAN);
+            }
+        }
 
-        QuantumUiTheme.sectionHeader(gui, font, Component.literal("BUILD CONTROL"), x + 12, y + 137, 248);
-        QuantumUiTheme.sectionHeader(gui, font, Component.literal("PLACEMENT POLICY"), x + 12, y + 164, 248);
+        // Tablet writer rail: blank input, animated transfer path and output.
+        QuantumUiTheme.panel(gui, x + 230, y + 31, x + 262, y + 138);
+        gui.text(font, Component.literal("IN"), x + 241, y + 39, QuantumUiTheme.MUTED, false);
+        QuantumUiTheme.slotFrame(gui, x + 240, y + 57, false, QuantumUiTheme.CYAN);
+        int pulse = ((int) (System.currentTimeMillis() / 180L)) % 3;
+        for (int i = 0; i < 3; i++) {
+            gui.fill(x + 248 - i, y + 82 + i * 7, x + 254 + i, y + 85 + i * 7,
+                    i == pulse ? QuantumUiTheme.CYAN : QuantumUiTheme.CYAN_DIM);
+        }
+        gui.text(font, Component.literal("OUT"), x + 236, y + 106, QuantumUiTheme.MUTED, false);
+        QuantumUiTheme.slotFrame(gui, x + 240, y + 119, false, QuantumUiTheme.GREEN);
 
-        QuantumUiTheme.slotFrame(gui, x + 162, y + 110, menu.data().get(8) != 0, QuantumUiTheme.CYAN);
+        int progress = status(menu.data().get(2)) == ConstructorStatus.COMPLETE
+                ? menu.data().get(4) : Math.min(menu.data().get(3), menu.data().get(4));
+        QuantumUiTheme.segmentedBar(gui, x + 54, y + 169, 172, 8,
+                progress, Math.max(1, menu.data().get(4)), QuantumUiTheme.CYAN, 16);
+        gui.text(font, Component.literal(progress + " / " + Math.max(0, menu.data().get(4))),
+                x + 117, y + 180, QuantumUiTheme.TEXT_SOFT, false);
 
-        // Machine controls end at y=203. Keep a hard visual separation before
-        // the first vanilla inventory row at y=208 so widgets never overlap slots.
         gui.fill(x + 8, y + 204, x + imageWidth - 8, y + 205, QuantumUiTheme.BORDER_DIM);
         gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 196, QuantumUiTheme.MUTED, false);
     }

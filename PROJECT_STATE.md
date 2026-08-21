@@ -2,73 +2,63 @@
 
 ## Source of truth
 
-The editable GitHub project is the source of truth for all future Quantum Tools development.
+The editable GitHub source is the source of truth for Quantum Tools development.
 
-- Current source version: **3.0.6-dev.9**
+- Active source version: **3.0.6-dev.10**
+- Stable `main`: **3.0.6-dev.9**
 - Minecraft: **26.1.2**
-- Loader: **NeoForge**
-- NeoForge dependency: **26.1.2.95**
+- Loader: **NeoForge 26.1.2.95**
 - Java toolchain: **25**
 - Mod id: `rftoolsbuilder`
+- Integration base: `source/3.0.6-dev.10-complete-reconstruction`
+- Active feature: `feature/schematic-create-parity-ui` (PR #12)
 - Java source: `src/main/java`
-- Resources/assets: `src/main/resources`
+- Resources: `src/main/resources`
 
-Compiled JARs are outputs used for testing and release validation. They must not diverge from the source tree or be used as the primary editing base.
+Compiled JARs are build/test outputs. They must not diverge from or replace the editable source tree.
 
 ## Constructor visual
 
-The user-approved Constructor visual is **V5**. Its models and textures are stored directly in `src/main/resources/assets/rftoolsbuilder`.
+The user-approved Constructor visual is **V5** and remains frozen. Schematic, UI, networking, material, energy and gameplay corrections must not alter that model unless a visual change is explicitly requested.
 
-V5 is frozen. Schematic, UI, networking, material, energy or gameplay corrections must not alter this model unless a visual change is explicitly requested.
+## Current stage
 
-The approved visual includes the low/wide stabilized base, multipart turret/barrel layout, cleaned white/gunmetal/cyan textures, emissive energy elements and the shortened rear profile approved in-game.
+The active stage is **schematic placement and Quantum UI runtime validation**.
 
-## Schematic work — current stage
+Implemented in the current dev.10 feature branch:
 
-Work is stage-gated. The current schematic stage is **Placement Editor / deployment usability**.
+- mouse/UI-first placement with no mandatory conflicting keybinds;
+- deploy, horizontal move, vertical move, rotate, mirror and precise modes;
+- exact signed X/Y/Z, 0°/90°/180°/270° rotation and mirror editing;
+- live hologram while editing;
+- draft transform synchronized only after explicit Apply;
+- cancel and clear deployment behavior;
+- shared Quantum UI components;
+- rebuilt Constructor and Schematic Table screens;
+- persistent replace mode, skip-missing and Block Entity policy controls;
+- corrected 14-field Constructor menu synchronization;
+- complete editable Builder/Quarry reconstruction in the dev.10 integration base.
 
-Implemented in 3.0.6-dev.9:
+## Verified
 
-- mandatory G/R/M schematic keybinds removed;
-- mandatory Shift+scroll placement control removed;
-- right-clicking a written Schematic Card opens a placement UI;
-- crosshair is sampled only for initial/explicit targeting instead of continuously dragging the schematic;
-- anchor remains fixed until changed deliberately;
-- X/Y/Z movement via -10, -1, +1 and +10 controls;
-- rotation 0°, 90°, 180°, 270°;
-- mirror None / Left-Right / Front-Back;
-- explicit target, place-in-front and center controls;
-- reset, confirm, cancel and clear deployment;
-- hologram remains visible while the non-pausing placement screen is open;
-- deployment confirmation synchronizes anchor/rotation/mirror/deployed state to the server.
+- GitHub Actions clean builds for the active PR are successful.
+- The feature is source-based; no binary JAR patch is part of the implementation.
+- The active PR is mergeable into its dev.10 integration base.
 
-No later schematic problem should be treated as the active stage until this editor is validated in-game.
+## Still required
 
-## Build validation
+Do not promote this stage solely because it compiles. Validate in Minecraft:
 
-The source with the Placement Editor and approved V5 Constructor assets has compiled successfully with Gradle/NeoForge before promotion.
+1. schematic upload, output card and server/client fallback;
+2. placement pivot, bounds, move, rotation, mirror, apply, cancel and clear;
+3. hologram readability and UI layout at GUI scales 1–4;
+4. Constructor energy, materials, replacement policies and Block Entity handling;
+5. persistence across save/reload;
+6. Builder/Miner registration and runtime regression;
+7. representative NBT, SCHEM, LITEMATIC and SCHEMATIC files.
 
-For every future change:
-
-1. implement in source;
-2. compile;
-3. validate the changed system;
-4. test in Minecraft when behavior or visuals depend on the game runtime;
-5. fix regressions before moving to the next stage;
-6. update source and documentation together.
+The detailed checklist is in `docs/SCHEMATIC_UI_RUNTIME_CHECKLIST.md`.
 
 ## Mandatory development standard
 
-`PADRAO_DE_DESENVOLVIMENTO_QUANTUM_TOOLS.txt` is the project process specification. It defines:
-
-- one-stage-at-a-time development;
-- required modeling fidelity and in-game validation;
-- prohibition on unauthorized simplification;
-- no placeholder or half-implemented features being called complete;
-- full schematic pipeline expectations;
-- UI-first placement controls without mandatory conflicting keybinds;
-- client/server authority and networking validation;
-- regression testing;
-- source synchronization and definition of done.
-
-This standard must be followed for subsequent Quantum Tools work.
+`PADRAO_DE_DESENVOLVIMENTO_QUANTUM_TOOLS.txt` remains mandatory. Implement, compile, validate, test in Minecraft, fix regressions, and update source/documentation together before moving to the next stage.

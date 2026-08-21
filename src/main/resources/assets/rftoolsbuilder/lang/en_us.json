@@ -20,5 +20,6 @@
   "screen.rftoolsbuilder.placement.clear": "CLEAR",
   "screen.rftoolsbuilder.placement.cancel": "CANCEL",
   "screen.rftoolsbuilder.placement.confirm": "CONFIRM",
-  "screen.rftoolsbuilder.placement.card_missing": "Schematic Card is no longer in hand"
+  "screen.rftoolsbuilder.placement.card_missing": "Schematic Card is no longer in hand",
+  "item.rftoolsbuilder.material_list_tablet": "Material List Tablet"
 }

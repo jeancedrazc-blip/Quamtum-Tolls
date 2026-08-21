@@ -20,5 +20,6 @@
   "screen.rftoolsbuilder.placement.clear": "LIMPAR",
   "screen.rftoolsbuilder.placement.cancel": "CANCELAR",
   "screen.rftoolsbuilder.placement.confirm": "CONFIRMAR",
-  "screen.rftoolsbuilder.placement.card_missing": "O Cartão de Schematic não está mais na mão"
+  "screen.rftoolsbuilder.placement.card_missing": "O Cartão de Schematic não está mais na mão",
+  "item.rftoolsbuilder.material_list_tablet": "Tablet de Materiais"
 }

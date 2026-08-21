@@ -107,6 +107,10 @@ public class BuilderBlockEntity extends BlockEntity implements Container, MenuPr
                 case 9 -> (int) Math.min(Integer.MAX_VALUE, cursor);
                 case 10 -> (int) Math.min(Integer.MAX_VALUE, volume());
                 case 11 -> status;
+                case 12 -> energy.getEnergyStored() & 0xFFFF;
+                case 13 -> energy.getEnergyStored() >>> 16;
+                case 14 -> energy.getMaxEnergyStored() & 0xFFFF;
+                case 15 -> energy.getMaxEnergyStored() >>> 16;
                 default -> 0;
             };
         }
@@ -127,7 +131,7 @@ public class BuilderBlockEntity extends BlockEntity implements Container, MenuPr
             }
         }
 
-        @Override public int getCount() { return 12; }
+        @Override public int getCount() { return 16; }
     };
 
     public BuilderBlockEntity(BlockPos pos, BlockState state) {

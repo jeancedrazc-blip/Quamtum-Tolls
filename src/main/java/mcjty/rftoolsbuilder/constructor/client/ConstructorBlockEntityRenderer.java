@@ -143,10 +143,20 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
             state.energyPulse = 1.0f;
         }
 
-        if (state.status == ConstructorStatus.FIRING && state.hasTarget) {
+        if (state.hasTarget && (state.status == ConstructorStatus.CHARGING
+                || state.status == ConstructorStatus.FIRING)) {
             state.projectileVisible = targetState != null || state.projectileIsItem;
-            state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick) / (float) blockEntity.flightTicks());
-            state.recoil = 0.145f * (1.0f - smoothStep(state.projectileProgress));
+            if (state.status == ConstructorStatus.FIRING) {
+                state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick)
+                        / (float) blockEntity.flightTicks());
+                state.recoil = 0.145f * (1.0f - smoothStep(state.projectileProgress));
+            } else {
+                // Show the locked path while the shot is charging. This is only
+                // reached after the server has validated energy, material,
+                // chunk, range and block support, so the preview cannot promise
+                // a placement that the authoritative machine already rejected.
+                state.projectileProgress = 0.0f;
+            }
         }
     }
 
@@ -198,7 +208,9 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         double beamLength = Math.max(0.05, length - MUZZLE_DISTANCE);
         submitBeam(state, poseStack, collector, beamLength);
         submitTargetFrame(state, poseStack, collector);
-        submitMaterializingTarget(state, poseStack, collector);
+        if (state.status == ConstructorStatus.FIRING) {
+            submitMaterializingTarget(state, poseStack, collector);
+        }
     }
 
     private static void submitBeam(ConstructorRenderState state, PoseStack poseStack,

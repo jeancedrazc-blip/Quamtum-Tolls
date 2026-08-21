@@ -86,6 +86,13 @@ public final class QuantumUiTheme {
         int innerW = Math.max(0, width - 2);
         int filled = (int) Math.round(innerW * ratio);
         gui.fill(x + 1, y + 1, x + 1 + filled, y + height - 1, color);
+        if (filled > 2 && height > 3) {
+            gui.fill(x + 2, y + 1, x + filled, y + 2, highlight(color));
+            gui.fill(x + 2, y + height - 2, x + filled, y + height - 1, shade(color));
+            for (int px = x + 4; px < x + filled; px += 6) {
+                gui.fill(px, y + 2, px + 1, y + height - 2, shade(color));
+            }
+        }
 
         if (segments > 1) {
             for (int i = 1; i < segments; i++) {
@@ -105,6 +112,14 @@ public final class QuantumUiTheme {
         int innerH = Math.max(0, height - 2);
         int filled = (int) Math.round(innerH * ratio);
         gui.fill(x + 1, y + height - 1 - filled, x + width - 1, y + height - 1, color);
+        if (filled > 2 && width > 3) {
+            int top = y + height - 1 - filled;
+            gui.fill(x + 1, top + 1, x + 2, y + height - 2, highlight(color));
+            gui.fill(x + width - 2, top + 1, x + width - 1, y + height - 2, shade(color));
+            for (int py = y + height - 4; py > top; py -= 6) {
+                gui.fill(x + 2, py, x + width - 2, py + 1, shade(color));
+            }
+        }
 
         if (segments > 1) {
             for (int i = 1; i < segments; i++) {
@@ -166,6 +181,13 @@ public final class QuantumUiTheme {
         int r = Math.max(0, ((color >> 16) & 255) - 3);
         int g = Math.max(0, ((color >> 8) & 255) - 3);
         int b = Math.max(0, (color & 255) - 3);
+        return 0xFF000000 | r << 16 | g << 8 | b;
+    }
+
+    private static int highlight(int color) {
+        int r = Math.min(255, ((color >> 16) & 255) + 28);
+        int g = Math.min(255, ((color >> 8) & 255) + 28);
+        int b = Math.min(255, (color & 255) + 28);
         return 0xFF000000 | r << 16 | g << 8 | b;
     }
 

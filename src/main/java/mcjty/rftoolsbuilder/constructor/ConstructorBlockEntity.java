@@ -44,6 +44,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     public static final int CHARGE_TICKS = 5;
     public static final int MIN_FLIGHT_TICKS = 10;
     public static final int SHOT_COOLDOWN_TICKS = 4;
+    public static final int TABLET_SCAN_TICKS = 24;
     public static final int MAX_TARGET_DISTANCE = 256;
     public static final int SLOT_SCHEMATIC = 0;
     public static final int SLOT_TABLET_INPUT = 1;
@@ -64,6 +65,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     private int shotProgress;
     private int flightTicks = MIN_FLIGHT_TICKS;
     private int shotCooldown;
+    private int tabletScanProgress;
     private boolean running;
     private boolean shotReserved;
     private boolean pauseAfterShot;
@@ -91,11 +93,16 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 case 11 -> replaceBlockEntities ? 1 : 0;
                 case 12 -> flightTicks;
                 case 13 -> targetIsEntity ? 1 : 0;
+                case 14 -> energy.getEnergyStored() & 0xFFFF;
+                case 15 -> energy.getEnergyStored() >>> 16;
+                case 16 -> energy.getMaxEnergyStored() & 0xFFFF;
+                case 17 -> energy.getMaxEnergyStored() >>> 16;
+                case 18 -> tabletScanProgress;
                 default -> 0;
             };
         }
         @Override public void set(int index, int value) {}
-        @Override public int getCount() { return 14; }
+        @Override public int getCount() { return 19; }
     };
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
@@ -336,6 +343,12 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             case 4 -> { skipMissing = !skipMissing; setChangedAndSync(); yield true; }
             case 5 -> { replaceBlockEntities = !replaceBlockEntities; setChangedAndSync(); yield true; }
             case 6 -> writeMaterialTablet();
+            case 7 -> {
+                if (running || shotReserved || !(schematicCard().getItem() instanceof SchematicCardItem)) yield false;
+                SchematicCardItem.clearReplacements(schematicCard());
+                setChangedAndSync();
+                yield true;
+            }
             default -> false;
         };
     }
@@ -377,6 +390,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private void serverTick(ServerLevel level) {
+        tickMaterialTabletWriter();
         if (activeJob == null && pendingJobData != null) restorePendingJob();
         if (!running || targetPos == null || (!targetIsEntity && targetState == null)) return;
         if (shotCooldown > 0 && !shotReserved) { shotCooldown--; return; }
@@ -415,6 +429,27 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 }
             }
             default -> { }
+        }
+    }
+
+    private void tickMaterialTabletWriter() {
+        boolean ready = tabletInput().getItem() instanceof MaterialListTabletItem
+                && !MaterialListTabletItem.isWritten(tabletInput())
+                && tabletOutput().isEmpty()
+                && SchematicCardItem.hasSource(schematicCard());
+        if (!ready) {
+            if (tabletScanProgress != 0) {
+                tabletScanProgress = 0;
+                setChangedAndSync();
+            }
+            return;
+        }
+        tabletScanProgress++;
+        if (tabletScanProgress >= TABLET_SCAN_TICKS) {
+            tabletScanProgress = 0;
+            writeMaterialTablet();
+        } else if ((tabletScanProgress & 3) == 0) {
+            syncClientState();
         }
     }
 
@@ -649,7 +684,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         }
     }
 
-    private void setChangedAndSync() { setChanged(); syncClientState(); }
+    void setChangedAndSync() { setChanged(); syncClientState(); }
     private void syncClientState() {
         if (level instanceof ServerLevel server) server.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
@@ -766,8 +801,12 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     public void setItem(int slot, ItemStack stack) {
         if (slot < 0 || slot >= items.size()) return;
         if (slot == SLOT_SCHEMATIC && (!canRemoveCard() && !ItemStack.matches(schematicCard(), stack))) return;
+        if (slot == SLOT_TABLET_INPUT && !stack.isEmpty()
+                && (!(stack.getItem() instanceof MaterialListTabletItem) || MaterialListTabletItem.isWritten(stack))) return;
+        if (slot == SLOT_TABLET_OUTPUT && !stack.isEmpty()) return;
         items.set(slot, stack);
         if (!stack.isEmpty() && stack.getCount() > 1) stack.setCount(1);
+        if (slot == SLOT_TABLET_INPUT) tabletScanProgress = 0;
         if (slot == SLOT_SCHEMATIC && stack.isEmpty()) clearJob(); else setChangedAndSync();
     }
 
@@ -776,7 +815,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     @Override
     public void clearContent() {
         if (!canRemoveCard()) return;
-        items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
+        for (int slot = 0; slot < items.size(); slot++) items.set(slot, ItemStack.EMPTY);
+        tabletScanProgress = 0;
         clearJob();
     }
 

@@ -168,6 +168,22 @@ public final class SchematicCardItem extends Item {
         return true;
     }
 
+    public static Block replacementFor(ItemStack stack, Block source) {
+        Identifier sourceId = BuiltInRegistries.BLOCK.getKey(source);
+        CompoundTag tag = root(stack);
+        int count = Math.max(0, Math.min(MAX_REPLACEMENTS, tag.getIntOr(P + "ReplacementCount", 0)));
+        for (int i = 0; i < count; i++) {
+            if (!sourceId.toString().equals(tag.getString(P + "ReplacementFrom" + i).orElse(""))) continue;
+            String target = tag.getString(P + "ReplacementTo" + i).orElse("");
+            try {
+                return BuiltInRegistries.BLOCK.getValue(Identifier.parse(target));
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     public static void clearReplacements(ItemStack stack) {
         CompoundTag tag = root(stack);
         int count = Math.max(0, Math.min(MAX_REPLACEMENTS, tag.getIntOr(P + "ReplacementCount", 0)));

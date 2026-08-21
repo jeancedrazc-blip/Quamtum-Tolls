@@ -22,7 +22,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
                 inventory.player.level().getBlockEntity(buffer.readBlockPos()) instanceof ConstructorBlockEntity found ? found : null,
-                new SimpleContainerData(14));
+                new SimpleContainerData(19));
     }
 
     public ConstructorMenu(int id, Inventory inventory, ConstructorBlockEntity constructor, ContainerData data) {
@@ -36,6 +36,16 @@ public final class ConstructorMenu extends AbstractContainerMenu {
                     return constructor.canRemoveCard() && stack.getItem() instanceof SchematicCardItem;
                 }
                 @Override public boolean mayPickup(Player player) { return constructor.canRemoveCard(); }
+                @Override public int getMaxStackSize() { return 1; }
+            });
+            addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_TABLET_INPUT, 240, 57) {
+                @Override public boolean mayPlace(ItemStack stack) {
+                    return stack.getItem() instanceof MaterialListTabletItem && !MaterialListTabletItem.isWritten(stack);
+                }
+                @Override public int getMaxStackSize() { return 1; }
+            });
+            addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_TABLET_OUTPUT, 240, 119) {
+                @Override public boolean mayPlace(ItemStack stack) { return false; }
                 @Override public int getMaxStackSize() { return 1; }
             });
         }
@@ -62,16 +72,21 @@ public final class ConstructorMenu extends AbstractContainerMenu {
     }
 
     private void populateMaterialDisplay(ItemStack card) {
+        materialDisplay.clearContent();
+        materialSources.clear();
         if (!SchematicCardItem.hasSource(card)) return;
         try {
             var plan = UniversalSchematicLoader.loadCard(card, false);
-            java.util.LinkedHashSet<net.minecraft.world.item.Item> seen = new java.util.LinkedHashSet<>();
+            java.util.LinkedHashSet<Block> seen = new java.util.LinkedHashSet<>();
             for (var entry : plan.entries()) {
-                var item = entry.sourceState().getBlock().asItem();
-                if (item == net.minecraft.world.item.Items.AIR || !seen.add(item)) continue;
+                Block source = entry.sourceState().getBlock();
+                var item = source.asItem();
+                if (item == net.minecraft.world.item.Items.AIR || !seen.add(source)) continue;
                 int slot = seen.size() - 1;
                 if (slot >= materialDisplay.getContainerSize()) break;
-                materialDisplay.setItem(slot, new ItemStack(item));
+                materialSources.add(source);
+                Block shown = SchematicCardItem.replacementFor(card, source);
+                materialDisplay.setItem(slot, new ItemStack((shown == null ? source : shown).asItem()));
             }
         } catch (java.io.IOException | RuntimeException ignored) {
         }
@@ -89,7 +104,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
                 Block source = materialSources.get(materialIndex);
                 if (SchematicCardItem.addReplacement(constructor.schematicCard(), source, blockItem.getBlock())) {
                     materialDisplay.setItem(materialIndex, new ItemStack(blockItem.getBlock()));
-                    constructor.setChanged();
+                    constructor.setChangedAndSync();
                 }
             }
             return;
@@ -97,7 +112,12 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         super.clicked(slotId, button, clickType, player);
     }
 
-    @Override public boolean clickMenuButton(Player player, int id) { return constructor != null && constructor.handleMenuButton(id); }
+    @Override
+    public boolean clickMenuButton(Player player, int id) {
+        if (constructor == null || !constructor.handleMenuButton(id)) return false;
+        if (id == 7) populateMaterialDisplay(constructor.schematicCard());
+        return true;
+    }
 
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
@@ -113,6 +133,8 @@ public final class ConstructorMenu extends AbstractContainerMenu {
             if (!moveItemStackTo(source, machineSlots, slots.size(), true)) return ItemStack.EMPTY;
         } else if (source.getItem() instanceof SchematicCardItem) {
             if (constructor == null || !constructor.canRemoveCard() || !moveItemStackTo(source, 0, 1, false)) return ItemStack.EMPTY;
+        } else if (source.getItem() instanceof MaterialListTabletItem && !MaterialListTabletItem.isWritten(source)) {
+            if (constructor == null || !moveItemStackTo(source, 1, 2, false)) return ItemStack.EMPTY;
         } else return ItemStack.EMPTY;
 
         if (source.isEmpty()) slot.setByPlayer(ItemStack.EMPTY); else slot.setChanged();

@@ -1,5 +1,6 @@
 package mcjty.rftoolsbuilder.constructor.client;
 
+import mcjty.rftoolsbuilder.constructor.ConstructorBlockEntity;
 import mcjty.rftoolsbuilder.constructor.ConstructorMenu;
 import mcjty.rftoolsbuilder.constructor.ConstructorReplaceMode;
 import mcjty.rftoolsbuilder.constructor.ConstructorStatus;
@@ -21,6 +22,9 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     private QuantumButton startButton;
     private QuantumButton pauseButton;
     private QuantumButton stopButton;
+    private QuantumButton configButton;
+    private final java.util.List<QuantumButton> configWidgets = new java.util.ArrayList<>();
+    private boolean configOpen;
 
     public ConstructorScreen(ConstructorMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title, 272, 288);
@@ -44,18 +48,46 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
                 Component.literal("■ STOP"), () -> sendButton(1),
                 () -> false, QuantumUiTheme.RED));
 
-        addRenderableWidget(new QuantumButton(x + 12, y + 176, 32, 18,
-                Component.literal("⚙"), () -> sendButton(3),
-                () -> false, QuantumUiTheme.AMBER));
-        addRenderableWidget(new QuantumButton(x + 230, y + 145, 32, 19,
-                Component.literal("WRITE"), () -> sendButton(6),
-                () -> false, QuantumUiTheme.GREEN));
+        configButton = addRenderableWidget(new QuantumButton(x + 236, y + 5, 26, 17,
+                Component.literal("⚙"), this::toggleConfig,
+                () -> configOpen, QuantumUiTheme.AMBER));
+
+        addConfigModeButton(x + 62, y + 55, 74, "AIR ONLY", ConstructorReplaceMode.DONT_REPLACE);
+        addConfigModeButton(x + 140, y + 55, 74, "SOLID", ConstructorReplaceMode.REPLACE_SOLID);
+        addConfigModeButton(x + 62, y + 77, 74, "ANY", ConstructorReplaceMode.REPLACE_ANY);
+        addConfigModeButton(x + 140, y + 77, 74, "+ AIR", ConstructorReplaceMode.REPLACE_EMPTY);
+        configWidgets.add(addRenderableWidget(new QuantumButton(x + 62, y + 103, 74, 18,
+                Component.literal("SKIP MISSING"), () -> sendButton(4),
+                () -> menu.data().get(10) != 0, QuantumUiTheme.AMBER)));
+        configWidgets.add(addRenderableWidget(new QuantumButton(x + 140, y + 103, 74, 18,
+                Component.literal("BLOCK ENT."), () -> sendButton(5),
+                () -> menu.data().get(11) != 0, QuantumUiTheme.AMBER)));
+        configWidgets.add(addRenderableWidget(new QuantumButton(x + 88, y + 125, 100, 18,
+                Component.literal("CLEAR REPLACEMENTS"), () -> sendButton(7),
+                () -> false, QuantumUiTheme.RED)));
+        setConfigWidgetsVisible(false);
     }
 
     private void addModeButton(int x, int y, int width, String label, ConstructorReplaceMode mode) {
         addRenderableWidget(new QuantumButton(x, y, width, 17, Component.literal(label),
                 () -> setReplaceMode(mode), () -> replaceMode(menu.data().get(9)) == mode,
                 QuantumUiTheme.CYAN));
+    }
+
+    private void addConfigModeButton(int x, int y, int width, String label, ConstructorReplaceMode mode) {
+        QuantumButton button = new QuantumButton(x, y, width, 18, Component.literal(label),
+                () -> setReplaceMode(mode), () -> replaceMode(menu.data().get(9)) == mode,
+                QuantumUiTheme.CYAN);
+        configWidgets.add(addRenderableWidget(button));
+    }
+
+    private void toggleConfig() {
+        configOpen = !configOpen;
+        setConfigWidgetsVisible(configOpen);
+    }
+
+    private void setConfigWidgetsVisible(boolean visible) {
+        for (QuantumButton widget : configWidgets) widget.visible = visible;
     }
 
     private void setReplaceMode(ConstructorReplaceMode requested) {
@@ -103,7 +135,12 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         QuantumUiTheme.panel(gui, x + 10, y + 31, x + 50, y + 138);
         gui.text(font, Component.literal("FE"), x + 24, y + 38, QuantumUiTheme.MUTED, false);
         QuantumUiTheme.verticalGauge(gui, x + 20, y + 51, 20, 76,
-                Math.max(0, menu.data().get(0)), Math.max(1, menu.data().get(1)), QuantumUiTheme.CYAN, 10);
+                syncedInt(menu.data().get(14), menu.data().get(15)),
+                Math.max(1, syncedInt(menu.data().get(16), menu.data().get(17))), QuantumUiTheme.AMBER, 10);
+        int energy = syncedInt(menu.data().get(14), menu.data().get(15));
+        int capacity = Math.max(1, syncedInt(menu.data().get(16), menu.data().get(17)));
+        String pct = formatPercent(energy, capacity);
+        gui.text(font, Component.literal(pct), x + 30 - font.width(pct) / 2, y + 130, QuantumUiTheme.AMBER, false);
         gui.text(font, Component.literal("CARD"), x + 14, y + 143, QuantumUiTheme.MUTED, false);
         QuantumUiTheme.slotFrame(gui, x + 22, y + 158, menu.data().get(8) != 0, QuantumUiTheme.CYAN);
 
@@ -112,37 +149,47 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
         gui.text(font, Component.literal("MATERIALS IN SCHEMATIC"), x + 63, y + 39, QuantumUiTheme.CYAN, false);
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 7; col++) {
+                int slot = 3 + col + row * 7;
                 QuantumUiTheme.slotFrame(gui, x + 64 + col * 22, y + 55 + row * 25,
-                        false, QuantumUiTheme.CYAN);
+                        menu.getSlot(slot).hasItem(), QuantumUiTheme.CYAN);
             }
         }
+        gui.text(font, Component.literal("HOLD BLOCK + CLICK MATERIAL"), x + 68, y + 132,
+                QuantumUiTheme.MUTED, false);
 
         // Tablet writer rail: blank input, animated transfer path and output.
         QuantumUiTheme.panel(gui, x + 230, y + 31, x + 262, y + 138);
         gui.text(font, Component.literal("IN"), x + 241, y + 39, QuantumUiTheme.MUTED, false);
-        QuantumUiTheme.slotFrame(gui, x + 240, y + 57, false, QuantumUiTheme.CYAN);
-        int pulse = ((int) (System.currentTimeMillis() / 180L)) % 3;
+        QuantumUiTheme.slotFrame(gui, x + 240, y + 57, menu.getSlot(1).hasItem(), QuantumUiTheme.CYAN);
+        int scan = Math.max(0, Math.min(ConstructorBlockEntity.TABLET_SCAN_TICKS, menu.data().get(18)));
+        int pulse = scan == 0 ? -1 : scan * 3 / Math.max(1, ConstructorBlockEntity.TABLET_SCAN_TICKS);
         for (int i = 0; i < 3; i++) {
             gui.fill(x + 248 - i, y + 82 + i * 7, x + 254 + i, y + 85 + i * 7,
                     i == pulse ? QuantumUiTheme.CYAN : QuantumUiTheme.CYAN_DIM);
         }
         gui.text(font, Component.literal("OUT"), x + 236, y + 106, QuantumUiTheme.MUTED, false);
-        QuantumUiTheme.slotFrame(gui, x + 240, y + 119, false, QuantumUiTheme.GREEN);
+        QuantumUiTheme.slotFrame(gui, x + 240, y + 119, menu.getSlot(2).hasItem(), QuantumUiTheme.GREEN);
 
         int progress = status(menu.data().get(2)) == ConstructorStatus.COMPLETE
                 ? menu.data().get(4) : Math.min(menu.data().get(3), menu.data().get(4));
         QuantumUiTheme.segmentedBar(gui, x + 54, y + 169, 172, 8,
-                progress, Math.max(1, menu.data().get(4)), QuantumUiTheme.CYAN, 16);
+                progress, Math.max(1, menu.data().get(4)), QuantumUiTheme.AMBER, 16);
         gui.text(font, Component.literal(progress + " / " + Math.max(0, menu.data().get(4))),
                 x + 117, y + 180, QuantumUiTheme.TEXT_SOFT, false);
+
+        if (configOpen) {
+            QuantumUiTheme.panel(gui, x + 56, y + 31, x + 220, y + 148,
+                    QuantumUiTheme.AMBER, QuantumUiTheme.SURFACE_2);
+            QuantumUiTheme.title(gui, font, Component.literal("PLACEMENT CONFIG"), x + 138, y + 38);
+        }
 
         gui.fill(x + 8, y + 204, x + imageWidth - 8, y + 205, QuantumUiTheme.BORDER_DIM);
         gui.text(font, Component.literal("PLAYER INVENTORY"), x + 48, y + 196, QuantumUiTheme.MUTED, false);
     }
 
     private void drawEnergy(GuiGraphicsExtractor gui, int x, int y) {
-        int energy = Math.max(0, menu.data().get(0));
-        int capacity = Math.max(1, menu.data().get(1));
+        int energy = syncedInt(menu.data().get(14), menu.data().get(15));
+        int capacity = Math.max(1, syncedInt(menu.data().get(16), menu.data().get(17)));
         ConstructorStatus state = status(menu.data().get(2));
 
         gui.text(font, Component.literal("POWER CORE"), x + 16, y + 38, QuantumUiTheme.MUTED, false);
@@ -294,6 +341,10 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     private static String trim(String value, int max) {
         if (value == null) return "";
         return value.length() <= max ? value : value.substring(0, Math.max(1, max - 1)) + "…";
+    }
+
+    private static int syncedInt(int low, int high) {
+        return (low & 0xFFFF) | (high & 0xFFFF) << 16;
     }
 
     @Override

@@ -122,8 +122,8 @@ public class BuilderScreen extends AbstractContainerScreen<BuilderMenu> {
         gui.text(font, Component.literal("SHAPE"), x + 71, y + 64, QuantumUiTheme.MUTED, false);
         gui.text(font, Component.literal("QUARRY"), x + 111, y + 64, QuantumUiTheme.MUTED, false);
 
-        int energy = Math.max(0, menu.data().get(0));
-        int capacity = Math.max(1, menu.data().get(1));
+        int energy = syncedInt(menu.data().get(12), menu.data().get(13));
+        int capacity = Math.max(1, syncedInt(menu.data().get(14), menu.data().get(15)));
         gui.text(font, Component.literal("FE CORE"), x + 158, y + 54, QuantumUiTheme.MUTED, false);
         QuantumUiTheme.segmentedBar(gui, x + 158, y + 64, 78, 7, energy, capacity, QuantumUiTheme.CYAN, 8);
         gui.text(font, Component.literal(compact(energy) + " / " + compact(capacity)), x + 158, y + 75, QuantumUiTheme.TEXT_SOFT, false);
@@ -161,6 +161,10 @@ public class BuilderScreen extends AbstractContainerScreen<BuilderMenu> {
             case BuilderBlockEntity.STATUS_PAUSED -> "PAUSED";
             default -> "STANDBY";
         });
+    }
+
+    private static int syncedInt(int low, int high) {
+        return (low & 0xFFFF) | (high & 0xFFFF) << 16;
     }
 
     private static int statusColor(int status) {

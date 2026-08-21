@@ -20,7 +20,7 @@ public class BuilderMenu extends AbstractContainerMenu {
     public BuilderMenu(int containerId, Inventory playerInventory, FriendlyByteBuf extraData) {
         this(containerId, playerInventory,
                 (BuilderBlockEntity) playerInventory.player.level().getBlockEntity(extraData.readBlockPos()),
-                new SimpleContainerData(12));
+                new SimpleContainerData(16));
     }
 
     public BuilderMenu(int containerId, Inventory playerInventory, BuilderBlockEntity builder, ContainerData data) {

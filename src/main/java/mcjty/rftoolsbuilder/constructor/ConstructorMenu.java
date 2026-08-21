@@ -5,15 +5,15 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerData;
+import net.minecraft.world.inventory.ContainerData;\nimport net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.SimpleContainerData;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ItemStack;\nimport net.minecraft.world.item.BlockItem;\nimport net.minecraft.world.level.block.Block;
 
 public final class ConstructorMenu extends AbstractContainerMenu {
     private final ConstructorBlockEntity constructor;
     private final ContainerData data;
-    private final SimpleContainer materialDisplay = new SimpleContainer(21);
+    private final SimpleContainer materialDisplay = new SimpleContainer(21);\n    private final java.util.List<Block> materialSources = new java.util.ArrayList<>(21);
 
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
@@ -75,6 +75,23 @@ public final class ConstructorMenu extends AbstractContainerMenu {
 
     public ConstructorBlockEntity constructor() { return constructor; }
     public ContainerData data() { return data; }
+
+    @Override
+    public void clicked(int slotId, int button, ClickType clickType, Player player) {
+        if (slotId >= 3 && slotId < 24 && clickType == ClickType.PICKUP && constructor != null) {
+            int materialIndex = slotId - 3;
+            ItemStack filter = getCarried();
+            if (materialIndex < materialSources.size() && filter.getItem() instanceof BlockItem blockItem) {
+                Block source = materialSources.get(materialIndex);
+                if (SchematicCardItem.addReplacement(constructor.schematicCard(), source, blockItem.getBlock())) {
+                    materialDisplay.setItem(materialIndex, new ItemStack(blockItem.getBlock()));
+                    constructor.setChanged();
+                }
+            }
+            return;
+        }
+        super.clicked(slotId, button, clickType, player);
+    }
 
     @Override public boolean clickMenuButton(Player player, int id) { return constructor != null && constructor.handleMenuButton(id); }
 

@@ -7,17 +7,27 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.item.ItemStack;\nimport net.minecraft.core.component.DataComponents;\nimport net.minecraft.world.item.component.CustomData;\nimport net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.resources.Identifier;\nimport java.util.ArrayList;\nimport java.util.List;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Tall glass-fronted material list UI based on the approved sketch. */
 public final class MaterialListTabletScreen extends Screen {
     private static final int PANEL_W = 246;
     private static final int PANEL_H = 286;
-    private final ItemStack tablet;\n    private final List<MaterialRow> rows = new ArrayList<>();\n    private String schematicName = "-";\n    private int total;
+    private final ItemStack tablet;
+    private final List<MaterialRow> rows = new ArrayList<>();
+    private String schematicName = "-";
+    private int total;
 
     public MaterialListTabletScreen(ItemStack tablet) {
         super(Component.literal("MATERIAL LIST TABLET"));
-        this.tablet = tablet;\n        readTablet();
+        this.tablet = tablet;
+        readTablet();
     }
 
     private void readTablet() {

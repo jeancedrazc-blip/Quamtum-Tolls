@@ -345,7 +345,7 @@ public class BuilderBlockEntity extends BlockEntity implements Container, MenuPr
         boolean changed = false;
         for (Direction direction : Direction.values()) {
             BlockPos neighborPos = worldPosition.relative(direction);
-            ResourceHandler<?, ?> capability = server.getCapability(Capabilities.Item.BLOCK, neighborPos, direction.getOpposite());
+            ResourceHandler<?> capability = server.getCapability(Capabilities.Item.BLOCK, neighborPos, direction.getOpposite());
             if (capability == null) continue;
             @SuppressWarnings("unchecked")
             IItemHandler handler = IItemHandler.of((ResourceHandler) capability);

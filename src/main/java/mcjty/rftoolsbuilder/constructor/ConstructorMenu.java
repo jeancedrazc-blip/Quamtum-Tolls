@@ -1,6 +1,7 @@
 package mcjty.rftoolsbuilder.constructor;
 
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -12,6 +13,7 @@ import net.minecraft.world.item.ItemStack;
 public final class ConstructorMenu extends AbstractContainerMenu {
     private final ConstructorBlockEntity constructor;
     private final ContainerData data;
+    private final SimpleContainer materialDisplay = new SimpleContainer(21);
 
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
@@ -34,6 +36,18 @@ public final class ConstructorMenu extends AbstractContainerMenu {
             });
         }
 
+        if (constructor != null) {
+            populateMaterialDisplay(constructor.schematicCard());
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 7; col++) {
+                    addSlot(new Slot(materialDisplay, col + row * 7, 64 + col * 22, 55 + row * 25) {
+                        @Override public boolean mayPlace(ItemStack stack) { return false; }
+                        @Override public boolean mayPickup(Player player) { return false; }
+                    });
+                }
+            }
+        }
+
         int invX = 48;
         int invY = 208;
         for (int row = 0; row < 3; row++) {
@@ -41,6 +55,22 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         }
         for (int col = 0; col < 9; col++) addSlot(new Slot(inventory, col, invX + col * 18, invY + 58));
         addDataSlots(data);
+    }
+
+    private void populateMaterialDisplay(ItemStack card) {
+        if (!SchematicCardItem.hasSource(card)) return;
+        try {
+            var plan = UniversalSchematicLoader.loadCard(card, false);
+            java.util.LinkedHashSet<net.minecraft.world.item.Item> seen = new java.util.LinkedHashSet<>();
+            for (var entry : plan.entries()) {
+                var item = entry.sourceState().getBlock().asItem();
+                if (item == net.minecraft.world.item.Items.AIR || !seen.add(item)) continue;
+                int slot = seen.size() - 1;
+                if (slot >= materialDisplay.getContainerSize()) break;
+                materialDisplay.setItem(slot, new ItemStack(item));
+            }
+        } catch (java.io.IOException | RuntimeException ignored) {
+        }
     }
 
     public ConstructorBlockEntity constructor() { return constructor; }
@@ -55,7 +85,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         if (!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack source = slot.getItem();
         ItemStack copy = source.copy();
-        int machineSlots = constructor == null ? 0 : 3;
+        int machineSlots = constructor == null ? 0 : 24;
 
         if (index < machineSlots) {
             if (constructor != null && !constructor.canRemoveCard()) return ItemStack.EMPTY;

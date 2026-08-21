@@ -68,6 +68,7 @@ public final class ConstructorBootstrap {
     public static final DeferredItem<BlockItem> CONSTRUCTOR_ITEM = ITEMS.registerSimpleBlockItem(CONSTRUCTOR);
     public static final DeferredItem<BlockItem> SCHEMATIC_TABLE_ITEM = ITEMS.registerSimpleBlockItem(SCHEMATIC_TABLE);
     public static final DeferredItem<SchematicCardItem> SCHEMATIC_CARD = ITEMS.registerItem("schematic_card", SchematicCardItem::new);
+    public static final DeferredItem<MaterialListTabletItem> MATERIAL_LIST_TABLET = ITEMS.registerItem("material_list_tablet", MaterialListTabletItem::new);
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ConstructorBlockEntity>> CONSTRUCTOR_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("constructor", () -> new BlockEntityType<>(ConstructorBlockEntity::new, false, CONSTRUCTOR.get()));
@@ -107,6 +108,7 @@ public final class ConstructorBootstrap {
             event.accept(CONSTRUCTOR_ITEM.get());
             event.accept(SCHEMATIC_TABLE_ITEM.get());
             event.accept(SCHEMATIC_CARD.get());
+            event.accept(MATERIAL_LIST_TABLET.get());
         }
     }
 }

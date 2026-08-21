@@ -25,7 +25,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         this.data = data;
 
         if (constructor != null) {
-            addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_SCHEMATIC, 162, 110) {
+            addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_SCHEMATIC, 22, 158) {
                 @Override public boolean mayPlace(ItemStack stack) {
                     return constructor.canRemoveCard() && stack.getItem() instanceof SchematicCardItem;
                 }
@@ -55,7 +55,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         if (!slot.hasItem()) return ItemStack.EMPTY;
         ItemStack source = slot.getItem();
         ItemStack copy = source.copy();
-        int machineSlots = constructor == null ? 0 : 1;
+        int machineSlots = constructor == null ? 0 : 3;
 
         if (index < machineSlots) {
             if (constructor != null && !constructor.canRemoveCard()) return ItemStack.EMPTY;

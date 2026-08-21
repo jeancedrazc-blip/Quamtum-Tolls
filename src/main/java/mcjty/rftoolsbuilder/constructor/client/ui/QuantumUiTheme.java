@@ -36,7 +36,7 @@ public final class QuantumUiTheme {
 
     public static void window(GuiGraphicsExtractor gui, int x, int y, int w, int h) {
         gui.fill(x, y, x + w, y + h, BG);
-        gui.fill(x + 2, y + 2, x + w - 2, y + h - 2, SURFACE_2);
+        gui.fill(x + 2, y + 2, x + w - 2, y + h - 2, SURFACE_2);\n        brushed(gui, x + 3, y + 3, x + w - 3, y + h - 3, 0xFF10212B, 5);\n        rivets(gui, x + 5, y + 5, x + w - 5, y + h - 5);
         cornerCuts(gui, x, y, w, h, BG);
         frame(gui, x + 2, y + 2, x + w - 2, y + h - 2, BORDER_DIM);
     }
@@ -47,7 +47,7 @@ public final class QuantumUiTheme {
 
     public static void panel(GuiGraphicsExtractor gui, int x1, int y1, int x2, int y2, int border, int fill) {
         gui.fill(x1, y1, x2, y2, border);
-        gui.fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1, fill);
+        gui.fill(x1 + 1, y1 + 1, x2 - 1, y2 - 1, fill);\n        brushed(gui, x1 + 2, y1 + 2, x2 - 2, y2 - 2, shade(fill), 4);\n        rivets(gui, x1 + 3, y1 + 3, x2 - 3, y2 - 3);
         // Small clipped corners keep the HUD technical without becoming anti-vanilla.
         gui.fill(x1, y1, x1 + 3, y1 + 1, BG);
         gui.fill(x2 - 3, y1, x2, y1 + 1, BG);
@@ -121,7 +121,7 @@ public final class QuantumUiTheme {
         int border = active ? accent : BORDER_DIM;
         gui.fill(x - 2, y - 2, x + 20, y + 20, border);
         gui.fill(x - 1, y - 1, x + 19, y + 19, DEEP);
-        gui.fill(x, y, x + 18, y + 18, 0xFF0A141B);
+        gui.fill(x, y, x + 18, y + 18, 0xFF0A141B);\n        brushed(gui, x + 1, y + 1, x + 17, y + 17, 0xFF10232C, 3);
     }
 
     public static void buttonSurface(GuiGraphicsExtractor gui, int x, int y, int width, int height,
@@ -138,6 +138,30 @@ public final class QuantumUiTheme {
         if (selected) return CYAN;
         if (hovered) return TEXT;
         return TEXT_SOFT;
+    }
+
+    private static void brushed(GuiGraphicsExtractor gui, int x1, int y1, int x2, int y2, int color, int spacing) {
+        if (x2 <= x1 || y2 <= y1) return;
+        for (int y = y1 + spacing; y < y2; y += spacing) {
+            gui.fill(x1, y, x2, y + 1, color);
+        }
+    }
+
+    private static void rivets(GuiGraphicsExtractor gui, int x1, int y1, int x2, int y2) {
+        if (x2 - x1 < 8 || y2 - y1 < 8) return;
+        int dark = 0xFF020609;
+        int light = 0xFF31515C;
+        gui.fill(x1, y1, x1 + 1, y1 + 1, light);
+        gui.fill(x2 - 1, y1, x2, y1 + 1, dark);
+        gui.fill(x1, y2 - 1, x1 + 1, y2, dark);
+        gui.fill(x2 - 1, y2 - 1, x2, y2, light);
+    }
+
+    private static int shade(int color) {
+        int r = Math.max(0, ((color >> 16) & 255) - 3);
+        int g = Math.max(0, ((color >> 8) & 255) - 3);
+        int b = Math.max(0, (color & 255) - 3);
+        return 0xFF000000 | r << 16 | g << 8 | b;
     }
 
     private static void cornerCuts(GuiGraphicsExtractor gui, int x, int y, int w, int h, int color) {

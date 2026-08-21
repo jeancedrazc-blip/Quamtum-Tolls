@@ -1,0 +1,1 @@
+{"type":"minecraft:crafting_shaped","category":"misc","pattern":["RPR","ICI","RSR"],"key":{"R":"minecraft:redstone","P":"minecraft:diamond_pickaxe","S":"minecraft:diamond_shovel","I":"minecraft:iron_ingot","C":"rftoolsbuilder:shape_card_def"},"result":{"id":"rftoolsbuilder:shape_card_quarry","count":1}}

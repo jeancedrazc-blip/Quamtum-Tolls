@@ -1,0 +1,9 @@
+RFTools Builder 26.1.2 focused port
+
+Original project: RFToolsBuilder by McJty
+Original source license: MIT
+Upstream branch used as behavior/reference baseline: 1.21_neo / RFToolsBuilder 7.0.5 era
+Port target: Minecraft 26.1.2 + NeoForge 26.1.2.95
+Port adaptation: Jean Cedraz (Desertic0), 2026-08-18
+
+This port focuses on Builder + quarry shape cards. It is not an official McJty release.

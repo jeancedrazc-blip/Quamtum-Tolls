@@ -3,8 +3,8 @@ package mcjty.rftoolsbuilder.constructor.client;
 import mcjty.rftoolsbuilder.constructor.ConstructorBlockEntity;
 import mcjty.rftoolsbuilder.constructor.ConstructorMenu;
 import mcjty.rftoolsbuilder.constructor.ConstructorReplaceMode;
-import mcjty.rftoolsbuilder.constructor.ConstructorStatus;
 import mcjty.rftoolsbuilder.constructor.ConstructorSpeed;
+import mcjty.rftoolsbuilder.constructor.ConstructorStatus;
 import mcjty.rftoolsbuilder.constructor.SchematicCardItem;
 import mcjty.rftoolsbuilder.constructor.client.ui.QuantumButton;
 import mcjty.rftoolsbuilder.constructor.client.ui.QuantumUiTheme;
@@ -24,6 +24,10 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     private QuantumButton pauseButton;
     private QuantumButton stopButton;
     private QuantumButton configButton;
+    private QuantumButton materialUpButton;
+    private QuantumButton materialDownButton;
+    private QuantumButton replacementCloseButton;
+    private QuantumButton configCloseButton;
     private QuantumButton speedButton;
     private final java.util.List<QuantumButton> configWidgets = new java.util.ArrayList<>();
     private boolean configOpen;
@@ -51,8 +55,17 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
                 () -> false, QuantumUiTheme.RED));
 
         configButton = addRenderableWidget(new QuantumButton(x + 236, y + 5, 26, 17,
-                Component.literal("⚙"), this::toggleConfig,
+                Component.literal("⚙"), () -> sendButton(configOpen ? 11 : 10),
                 () -> configOpen, QuantumUiTheme.AMBER));
+
+        materialUpButton = addRenderableWidget(new QuantumButton(x + 215, y + 55, 10, 18,
+                Component.literal("▲"), () -> sendButton(8), () -> false, QuantumUiTheme.CYAN));
+        materialDownButton = addRenderableWidget(new QuantumButton(x + 215, y + 112, 10, 18,
+                Component.literal("▼"), () -> sendButton(9), () -> false, QuantumUiTheme.CYAN));
+        replacementCloseButton = addRenderableWidget(new QuantumButton(x + 202, y + 34, 13, 13,
+                Component.literal("×"), () -> sendButton(12), () -> false, QuantumUiTheme.RED));
+        configCloseButton = addRenderableWidget(new QuantumButton(x + 202, y + 34, 13, 13,
+                Component.literal("×"), () -> sendButton(11), () -> false, QuantumUiTheme.RED));
 
         addConfigModeButton(x + 62, y + 55, 74, "AIR ONLY", ConstructorReplaceMode.DONT_REPLACE);
         addConfigModeButton(x + 140, y + 55, 74, "SOLID", ConstructorReplaceMode.REPLACE_SOLID);
@@ -65,13 +78,15 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
                 Component.literal("BLOCK ENT."), () -> sendButton(5),
                 () -> menu.data().get(11) != 0, QuantumUiTheme.AMBER)));
         speedButton = addRenderableWidget(new QuantumButton(x + 62, y + 125, 74, 18,
-                Component.literal("SPEED 1x"), () -> sendButton(13),
+                Component.literal("NORMAL 1x"), () -> sendButton(13),
                 () -> false, QuantumUiTheme.CYAN));
         configWidgets.add(speedButton);
         configWidgets.add(addRenderableWidget(new QuantumButton(x + 140, y + 125, 74, 18,
                 Component.literal("CLEAR RULES"), () -> sendButton(7),
                 () -> false, QuantumUiTheme.RED)));
         setConfigWidgetsVisible(false);
+        replacementCloseButton.visible = false;
+        configCloseButton.visible = false;
     }
 
     private void addModeButton(int x, int y, int width, String label, ConstructorReplaceMode mode) {
@@ -85,11 +100,6 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
                 () -> setReplaceMode(mode), () -> replaceMode(menu.data().get(9)) == mode,
                 QuantumUiTheme.CYAN);
         configWidgets.add(addRenderableWidget(button));
-    }
-
-    private void toggleConfig() {
-        configOpen = !configOpen;
-        setConfigWidgetsVisible(configOpen);
     }
 
     private void setConfigWidgetsVisible(boolean visible) {
@@ -108,19 +118,34 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     protected void containerTick() {
         super.containerTick();
         ConstructorStatus state = status(menu.data().get(2));
+        configOpen = menu.uiMode() == 1;
+        boolean replacementOpen = menu.selectedMaterial() >= 0;
+        setConfigWidgetsVisible(configOpen);
+        if (configCloseButton != null) configCloseButton.visible = configOpen;
+        if (replacementCloseButton != null) replacementCloseButton.visible = replacementOpen;
+        if (materialUpButton != null) {
+            materialUpButton.visible = !configOpen && !replacementOpen && menu.materialCount() > ConstructorMenu.MATERIAL_PAGE_SIZE;
+            materialUpButton.active = menu.materialScroll() > 0;
+        }
+        if (materialDownButton != null) {
+            materialDownButton.visible = !configOpen && !replacementOpen && menu.materialCount() > ConstructorMenu.MATERIAL_PAGE_SIZE;
+            materialDownButton.active = menu.materialScroll() + ConstructorMenu.MATERIAL_PAGE_SIZE < menu.materialCount();
+        }
+        boolean modalOpen = configOpen || replacementOpen;
         boolean hasCard = menu.data().get(8) != 0;
         boolean shotInFlight = state == ConstructorStatus.FIRING;
         boolean hasJob = menu.data().get(4) > 0 || state != ConstructorStatus.IDLE;
 
         if (startButton != null) {
-            startButton.active = hasCard && !shotInFlight
+            startButton.active = !modalOpen && hasCard && !shotInFlight
                     && state != ConstructorStatus.AIMING && state != ConstructorStatus.CHARGING;
         }
         if (pauseButton != null) {
-            pauseButton.active = hasJob && state != ConstructorStatus.COMPLETE && state != ConstructorStatus.ERROR;
+            pauseButton.active = !modalOpen && hasJob && state != ConstructorStatus.COMPLETE && state != ConstructorStatus.ERROR;
             pauseButton.setMessage(Component.literal(state == ConstructorStatus.PAUSED ? "▶ RESUME" : "Ⅱ PAUSE"));
         }
-        if (stopButton != null) stopButton.active = hasJob && !shotInFlight;
+        if (stopButton != null) stopButton.active = !modalOpen && hasJob && !shotInFlight;
+        if (configButton != null) configButton.active = !replacementOpen;
         if (speedButton != null) {
             ConstructorSpeed selected = ConstructorSpeed.byOrdinal(menu.data().get(19));
             speedButton.setMessage(Component.literal(selected.label()));
@@ -131,6 +156,17 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
     private void sendButton(int id) {
         Minecraft mc = this.minecraft;
         if (mc != null && mc.gameMode != null) mc.gameMode.handleInventoryButtonClick(menu.containerId, id);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (!configOpen && menu.selectedMaterial() < 0
+                && mouseX >= leftPos + 54 && mouseX < leftPos + 226
+                && mouseY >= topPos + 31 && mouseY < topPos + 138 && scrollY != 0) {
+            sendButton(scrollY > 0 ? 8 : 9);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     @Override
@@ -157,16 +193,39 @@ public final class ConstructorScreen extends AbstractContainerScreen<Constructor
 
         // Large central region reserved for real schematic material icons.
         QuantumUiTheme.panel(gui, x + 54, y + 31, x + 226, y + 138);
-        gui.text(font, Component.literal("MATERIALS IN SCHEMATIC"), x + 63, y + 39, QuantumUiTheme.CYAN, false);
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 7; col++) {
-                int slot = 3 + col + row * 7;
-                QuantumUiTheme.slotFrame(gui, x + 64 + col * 22, y + 55 + row * 25,
-                        menu.getSlot(slot).hasItem(), QuantumUiTheme.CYAN);
+        boolean replacementOpen = menu.selectedMaterial() >= 0;
+        if (!replacementOpen && !configOpen) {
+            gui.text(font, Component.literal("MATERIALS IN SCHEMATIC"), x + 63, y + 39, QuantumUiTheme.CYAN, false);
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 7; col++) {
+                    int slot = 3 + col + row * 7;
+                    QuantumUiTheme.slotFrame(gui, x + 64 + col * 22, y + 55 + row * 25,
+                            menu.getSlot(slot).hasItem(), QuantumUiTheme.CYAN);
+                }
             }
+            if (menu.materialCount() > ConstructorMenu.MATERIAL_PAGE_SIZE) {
+                int trackTop = y + 75;
+                int trackBottom = y + 110;
+                gui.fill(x + 218, trackTop, x + 222, trackBottom, QuantumUiTheme.DEEP);
+                int range = Math.max(1, menu.materialCount() - ConstructorMenu.MATERIAL_PAGE_SIZE);
+                int thumbY = trackTop + menu.materialScroll() * Math.max(1, trackBottom - trackTop - 8) / range;
+                gui.fill(x + 219, thumbY, x + 221, thumbY + 8, QuantumUiTheme.CYAN);
+            }
+            gui.text(font, Component.literal("CLICK A MATERIAL TO REPLACE"), x + 68, y + 132,
+                    QuantumUiTheme.MUTED, false);
         }
-        gui.text(font, Component.literal("HOLD BLOCK + CLICK MATERIAL"), x + 68, y + 132,
-                QuantumUiTheme.MUTED, false);
+
+        if (replacementOpen) {
+            QuantumUiTheme.panel(gui, x + 56, y + 31, x + 220, y + 138,
+                    QuantumUiTheme.AMBER, QuantumUiTheme.SURFACE_2);
+            gui.text(font, Component.literal("MATERIAL FILTER"),
+                    x + 102, y + 41, QuantumUiTheme.TEXT, false);
+            gui.text(font, Component.literal("REPLACE WITH"), x + 103, y + 77,
+                    QuantumUiTheme.AMBER, false);
+            QuantumUiTheme.slotFrame(gui, x + 127, y + 96, menu.getSlot(24).hasItem(), QuantumUiTheme.AMBER);
+            gui.text(font, Component.literal("HOLD A BLOCK AND CLICK THE SLOT"), x + 66, y + 120,
+                    QuantumUiTheme.MUTED, false);
+        }
 
         // Tablet writer rail: blank input, animated transfer path and output.
         QuantumUiTheme.panel(gui, x + 230, y + 31, x + 262, y + 138);

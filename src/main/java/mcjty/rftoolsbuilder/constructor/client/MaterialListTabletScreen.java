@@ -31,6 +31,7 @@ public final class MaterialListTabletScreen extends Screen {
     private QuantumButton downButton;
 
     private String dataSignature = "";
+    private String syncStatus = "CONNECTING";
 
     public MaterialListTabletScreen(ItemStack tablet, InteractionHand hand) {
         super(Component.literal("MATERIAL LIST TABLET"));
@@ -64,9 +65,10 @@ public final class MaterialListTabletScreen extends Screen {
         dataSignature = encoded;
     }
 
-    public void applyServerData(String name, int blockTotal, String encoded) {
+    public void applyServerData(String name, int blockTotal, String encoded, String status) {
         this.schematicName = name;
         this.total = blockTotal;
+        this.syncStatus = status;
         readEncodedMaterials(encoded);
     }
 
@@ -153,6 +155,9 @@ public final class MaterialListTabletScreen extends Screen {
                         ? total + " blocks · " + rows.size() + " material types"
                         : "Insert this tablet in the Constructor input"),
                 left + 20, top + 57, QuantumUiTheme.TEXT_SOFT, false);
+        int statusColor = "LIVE".equals(syncStatus) ? QuantumUiTheme.GREEN : QuantumUiTheme.AMBER;
+        gui.text(font, Component.literal(syncStatus), left + PANEL_W - 21 - font.width(syncStatus), top + 42,
+                statusColor, false);
 
         int rowY = top + 88;
         for (int row = 0; row < 8; row++) {

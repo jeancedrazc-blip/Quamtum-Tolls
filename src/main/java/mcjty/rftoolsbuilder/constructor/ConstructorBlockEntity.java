@@ -367,6 +367,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             tag.putInt("QTMaterialKinds", counts.size());
             tag.putInt("QTMaterialTotal", plan.blockCount());
             tag.putString("QTMaterials", encodeMaterials(counts));
+            tag.putString("QTConstructorDimension", level.dimension().identifier().toString());
+            tag.putLong("QTConstructorPos", worldPosition.asLong());
             ItemStack written = tabletInput().copyWithCount(1);
             written.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
                     net.minecraft.world.item.component.CustomData.of(tag));
@@ -381,6 +383,10 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
 
     void refreshMaterialTablet() {
         ItemStack tablet = !tabletOutput().isEmpty() ? tabletOutput() : tabletInput();
+        refreshMaterialTablet(tablet);
+    }
+
+    public void refreshMaterialTablet(ItemStack tablet) {
         if (!(tablet.getItem() instanceof MaterialListTabletItem) || !MaterialListTabletItem.isWritten(tablet)
                 || !SchematicCardItem.hasSource(schematicCard())) return;
         try {
@@ -390,6 +396,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             tag.putInt("QTMaterialKinds", counts.size());
             tag.putInt("QTMaterialTotal", plan.blockCount());
             tag.putString("QTMaterials", encodeMaterials(counts));
+            tag.putString("QTConstructorDimension", level.dimension().identifier().toString());
+            tag.putLong("QTConstructorPos", worldPosition.asLong());
             tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
                     net.minecraft.world.item.component.CustomData.of(tag));
         } catch (IOException | RuntimeException ignored) {

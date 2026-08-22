@@ -404,6 +404,36 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         }
     }
 
+    /** Refreshes only owned quantities; the schematic card no longer needs to remain inserted. */
+    public boolean refreshTabletAvailability(ItemStack tablet) {
+        if (!(tablet.getItem() instanceof MaterialListTabletItem) || !MaterialListTabletItem.isWritten(tablet)
+                || !(level instanceof ServerLevel server)) return false;
+        var data = tablet.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        if (data == null) return false;
+        CompoundTag tag = data.copyTag();
+        String current = tag.getString("QTMaterials").orElse("");
+        StringBuilder refreshed = new StringBuilder(current.length() + 32);
+        try {
+            for (String token : current.split(";")) {
+                if (token.isBlank()) continue;
+                String[] fields = token.split("=");
+                if (fields.length < 2) continue;
+                var id = net.minecraft.resources.Identifier.parse(fields[0]);
+                int required = Integer.parseInt(fields[1]);
+                Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
+                int available = block == null ? 0
+                        : ConstructorMaterialAccess.countAvailable(server, worldPosition, block.asItem());
+                refreshed.append(fields[0]).append('=').append(required).append('=').append(available).append(';');
+            }
+            tag.putString("QTMaterials", refreshed.toString());
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private java.util.Map<String, Integer> materialCounts(ConstructionPlan plan) {
         java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
         for (var entry : plan.entries()) {

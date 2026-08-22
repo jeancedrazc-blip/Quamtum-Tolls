@@ -81,19 +81,20 @@ public final class ConstructorNetworking {
                 ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND;
         ItemStack tablet = player.getItemInHand(hand);
         if (!(tablet.getItem() instanceof MaterialListTabletItem)) return;
-        MaterialListTabletItem.refreshFromLinkedConstructor(player.level(), tablet);
+        String status = MaterialListTabletItem.refreshFromLinkedConstructor(player.level(), tablet);
         CustomData data = tablet.get(DataComponents.CUSTOM_DATA);
         if (data == null) return;
         var tag = data.copyTag();
         PacketDistributor.sendToPlayer(player, new SyncTabletMaterials(
                 tag.getString("QTSchematicName").orElse("-"),
                 tag.getIntOr("QTMaterialTotal", 0),
-                tag.getString("QTMaterials").orElse("")
+                tag.getString("QTMaterials").orElse(""),
+                status
         ));
     }
 
     private static void handleTabletSync(SyncTabletMaterials payload, IPayloadContext context) {
-        MaterialListTabletClient.receive(payload.schematicName(), payload.total(), payload.materials());
+        MaterialListTabletClient.receive(payload.schematicName(), payload.total(), payload.materials(), payload.status());
     }
 
     public record BeginUpload(BlockPos tablePos, String fileName, String format, long size, String sha256) implements CustomPacketPayload {
@@ -152,12 +153,13 @@ public final class ConstructorNetworking {
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
-    public record SyncTabletMaterials(String schematicName, int total, String materials) implements CustomPacketPayload {
+    public record SyncTabletMaterials(String schematicName, int total, String materials, String status) implements CustomPacketPayload {
         public static final Type<SyncTabletMaterials> TYPE = new Type<>(Identifier.fromNamespaceAndPath(ConstructorBootstrap.MOD_ID, "tablet_material_sync"));
         public static final StreamCodec<ByteBuf, SyncTabletMaterials> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.stringUtf8(512), SyncTabletMaterials::schematicName,
                 ByteBufCodecs.VAR_INT, SyncTabletMaterials::total,
                 ByteBufCodecs.stringUtf8(262144), SyncTabletMaterials::materials,
+                ByteBufCodecs.stringUtf8(64), SyncTabletMaterials::status,
                 SyncTabletMaterials::new
         );
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }

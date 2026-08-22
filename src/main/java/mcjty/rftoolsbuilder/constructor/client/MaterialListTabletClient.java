@@ -15,11 +15,11 @@ public final class MaterialListTabletClient {
                 hand == InteractionHand.MAIN_HAND ? 0 : 1));
     }
 
-    public static void receive(String schematicName, int total, String materials) {
+    public static void receive(String schematicName, int total, String materials, String status) {
         Minecraft minecraft = Minecraft.getInstance();
         minecraft.execute(() -> {
             if (minecraft.screen instanceof MaterialListTabletScreen screen) {
-                screen.applyServerData(schematicName, total, materials);
+                screen.applyServerData(schematicName, total, materials, status);
             }
         });
     }

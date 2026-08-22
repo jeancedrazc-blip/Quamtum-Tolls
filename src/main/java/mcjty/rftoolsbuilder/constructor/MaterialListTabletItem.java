@@ -29,7 +29,7 @@ public final class MaterialListTabletItem extends Item {
         return InteractionResult.SUCCESS;
     }
 
-    private static void refreshFromLinkedConstructor(ServerLevel level, ItemStack tablet) {
+    static void refreshFromLinkedConstructor(ServerLevel level, ItemStack tablet) {
         CustomData data = tablet.get(DataComponents.CUSTOM_DATA);
         if (data == null) return;
         var tag = data.copyTag();

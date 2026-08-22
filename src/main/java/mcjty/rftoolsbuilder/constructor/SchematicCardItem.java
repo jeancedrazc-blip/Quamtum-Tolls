@@ -18,7 +18,8 @@ import java.util.function.Consumer;
 
 /** A portable reference to a validated server schematic plus its world deployment transform. */
 public final class SchematicCardItem extends Item {
-    public static final int MAX_REPLACEMENTS = 64;
+    /** Effectively unbounded for real schematics while still guarding malformed NBT. */
+    public static final int MAX_REPLACEMENTS = 4096;
     public static final int SCHEMA_VERSION = 2;
     private static final String P = "QTSchematic";
 

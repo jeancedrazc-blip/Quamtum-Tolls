@@ -15,12 +15,17 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.block.Block;
 
 public final class ConstructorMenu extends AbstractContainerMenu {
+    public static final int MATERIAL_PAGE_SIZE = 21;
     private final ConstructorBlockEntity constructor;
     private final ContainerData data;
-    private final SimpleContainer materialDisplay = new SimpleContainer(21);
+    private final SimpleContainer materialDisplay = new SimpleContainer(MATERIAL_PAGE_SIZE);
     private final SimpleContainer replacementFilter = new SimpleContainer(1);
-    private final java.util.List<Block> materialSources = new java.util.ArrayList<>(21);
+    private final java.util.List<Block> materialSources = new java.util.ArrayList<>();
     private final DataSlot selectedMaterial = DataSlot.standalone();
+    private final DataSlot materialScroll = DataSlot.standalone();
+    private final DataSlot materialTotal = DataSlot.standalone();
+    private final DataSlot uiMode = DataSlot.standalone();
+    private int lastCardSignature;
 
     public ConstructorMenu(int id, Inventory inventory, FriendlyByteBuf buffer) {
         this(id, inventory,
@@ -40,16 +45,19 @@ public final class ConstructorMenu extends AbstractContainerMenu {
                 }
                 @Override public boolean mayPickup(Player player) { return constructor.canRemoveCard(); }
                 @Override public int getMaxStackSize() { return 1; }
+                @Override public boolean isActive() { return mainUiActive(); }
             });
             addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_TABLET_INPUT, 240, 57) {
                 @Override public boolean mayPlace(ItemStack stack) {
                     return stack.getItem() instanceof MaterialListTabletItem && !MaterialListTabletItem.isWritten(stack);
                 }
                 @Override public int getMaxStackSize() { return 1; }
+                @Override public boolean isActive() { return mainUiActive(); }
             });
             addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_TABLET_OUTPUT, 240, 119) {
                 @Override public boolean mayPlace(ItemStack stack) { return false; }
                 @Override public int getMaxStackSize() { return 1; }
+                @Override public boolean isActive() { return mainUiActive(); }
             });
         }
 
@@ -60,6 +68,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
                     addSlot(new Slot(materialDisplay, col + row * 7, 64 + col * 22, 55 + row * 25) {
                         @Override public boolean mayPlace(ItemStack stack) { return false; }
                         @Override public boolean mayPickup(Player player) { return false; }
+                        @Override public boolean isActive() { return mainUiActive(); }
                     });
                 }
             }
@@ -80,11 +89,19 @@ public final class ConstructorMenu extends AbstractContainerMenu {
         addDataSlots(data);
         selectedMaterial.set(-1);
         addDataSlot(selectedMaterial);
+        materialScroll.set(0);
+        addDataSlot(materialScroll);
+        materialTotal.set(materialSources.size());
+        addDataSlot(materialTotal);
+        uiMode.set(0);
+        addDataSlot(uiMode);
+        lastCardSignature = cardSignature();
     }
 
     private void populateMaterialDisplay(ItemStack card) {
         materialDisplay.clearContent();
         materialSources.clear();
+        materialTotal.set(0);
         if (!SchematicCardItem.hasSource(card)) return;
         try {
             var plan = UniversalSchematicLoader.loadCard(card, false);
@@ -93,19 +110,39 @@ public final class ConstructorMenu extends AbstractContainerMenu {
                 Block source = entry.sourceState().getBlock();
                 var item = source.asItem();
                 if (item == net.minecraft.world.item.Items.AIR || !seen.add(source)) continue;
-                int slot = seen.size() - 1;
-                if (slot >= materialDisplay.getContainerSize()) break;
                 materialSources.add(source);
-                Block shown = SchematicCardItem.replacementFor(card, source);
-                materialDisplay.setItem(slot, new ItemStack((shown == null ? source : shown).asItem()));
             }
+            materialScroll.set(Math.min(materialScroll.get(), maxMaterialScroll()));
+            materialTotal.set(materialSources.size());
+            refreshMaterialPage(card);
         } catch (java.io.IOException | RuntimeException ignored) {
         }
+    }
+
+    private void refreshMaterialPage(ItemStack card) {
+        materialDisplay.clearContent();
+        int first = materialScroll.get();
+        for (int slot = 0; slot < MATERIAL_PAGE_SIZE && first + slot < materialSources.size(); slot++) {
+            Block source = materialSources.get(first + slot);
+            Block shown = SchematicCardItem.replacementFor(card, source);
+            materialDisplay.setItem(slot, new ItemStack((shown == null ? source : shown).asItem()));
+        }
+    }
+
+    private int maxMaterialScroll() {
+        return Math.max(0, materialSources.size() - MATERIAL_PAGE_SIZE);
+    }
+
+    private boolean mainUiActive() {
+        return selectedMaterial.get() < 0 && uiMode.get() == 0;
     }
 
     public ConstructorBlockEntity constructor() { return constructor; }
     public ContainerData data() { return data; }
     public int selectedMaterial() { return selectedMaterial.get(); }
+    public int materialScroll() { return materialScroll.get(); }
+    public int materialCount() { return materialTotal.get(); }
+    public int uiMode() { return uiMode.get(); }
     public ItemStack selectedSource() {
         int selected = selectedMaterial.get();
         return selected >= 0 && selected < materialSources.size()
@@ -115,7 +152,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
     @Override
     public void clicked(int slotId, int button, ContainerInput clickType, Player player) {
         if (slotId >= 3 && slotId < 24 && clickType == ContainerInput.PICKUP && constructor != null) {
-            int materialIndex = slotId - 3;
+            int materialIndex = materialScroll.get() + slotId - 3;
             if (materialIndex < materialSources.size()) {
                 if (selectedMaterial.get() == materialIndex) {
                     selectedMaterial.set(-1);
@@ -156,13 +193,59 @@ public final class ConstructorMenu extends AbstractContainerMenu {
 
     @Override
     public boolean clickMenuButton(Player player, int id) {
-        if (constructor == null || !constructor.handleMenuButton(id)) return false;
+        if (constructor == null) return false;
+        if (id == 8 || id == 9) {
+            if (selectedMaterial.get() >= 0 || uiMode.get() != 0) return false;
+            int direction = id == 8 ? -MATERIAL_PAGE_SIZE : MATERIAL_PAGE_SIZE;
+            materialScroll.set(Math.max(0, Math.min(maxMaterialScroll(), materialScroll.get() + direction)));
+            refreshMaterialPage(constructor.schematicCard());
+            return true;
+        }
+        if (id == 10) {
+            selectedMaterial.set(-1);
+            replacementFilter.clearContent();
+            uiMode.set(1);
+            return true;
+        }
+        if (id == 11) {
+            uiMode.set(0);
+            return true;
+        }
+        if (id == 12) {
+            selectedMaterial.set(-1);
+            replacementFilter.clearContent();
+            return true;
+        }
+        if (!constructor.handleMenuButton(id)) return false;
         if (id == 7) {
             populateMaterialDisplay(constructor.schematicCard());
             int selected = selectedMaterial.get();
             if (selected >= 0 && selected < materialSources.size()) selectMaterial(selected);
+            refreshMaterialPage(constructor.schematicCard());
         }
         return true;
+    }
+
+    @Override
+    public void broadcastChanges() {
+        int signature = cardSignature();
+        if (signature != lastCardSignature) {
+            lastCardSignature = signature;
+            selectedMaterial.set(-1);
+            materialScroll.set(0);
+            uiMode.set(0);
+            replacementFilter.clearContent();
+            populateMaterialDisplay(constructor == null ? ItemStack.EMPTY : constructor.schematicCard());
+        }
+        super.broadcastChanges();
+    }
+
+    private int cardSignature() {
+        if (constructor == null) return 0;
+        ItemStack card = constructor.schematicCard();
+        if (!(card.getItem() instanceof SchematicCardItem)) return 0;
+        int hash = SchematicCardItem.sourceFile(card).hashCode();
+        return 31 * hash + SchematicCardItem.replacementSignature(card);
     }
 
     @Override

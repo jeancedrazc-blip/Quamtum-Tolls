@@ -2,7 +2,14 @@
 
 This changelog records verified repository state. Runtime-dependent behavior remains marked as pending until tested in Minecraft.
 
-## 3.0.6-dev.10 — active development
+## 3.0.6-dev.11
+
+- Constructor material grid now exposes every schematic material through mouse-wheel and button scrolling instead of truncating at 21 entries.
+- Replacement and placement settings are proper modal panels with reliable close controls and blocked background slots.
+- Material List Tablet now scrolls its complete list, renders real item icons, supports working filters, and stores adjacent inventory availability.
+- Schematic cards now support up to 4096 replacement rules and refresh the open Constructor menu when their source or substitutions change.
+
+## 3.0.6-dev.10
 
 ### Verified in source/build
 

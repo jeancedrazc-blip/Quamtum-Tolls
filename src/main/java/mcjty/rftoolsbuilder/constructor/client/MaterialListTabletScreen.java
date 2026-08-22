@@ -3,7 +3,6 @@ package mcjty.rftoolsbuilder.constructor.client;
 import mcjty.rftoolsbuilder.constructor.MaterialListTabletItem;
 import mcjty.rftoolsbuilder.constructor.client.ui.QuantumButton;
 import mcjty.rftoolsbuilder.constructor.client.ui.QuantumUiTheme;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -21,8 +20,13 @@ public final class MaterialListTabletScreen extends Screen {
     private static final int PANEL_H = 286;
     private final ItemStack tablet;
     private final List<MaterialRow> rows = new ArrayList<>();
+    private final List<MaterialRow> filteredRows = new ArrayList<>();
     private String schematicName = "-";
     private int total;
+    private int scroll;
+    private Filter filter = Filter.ALL;
+    private QuantumButton upButton;
+    private QuantumButton downButton;
 
     public MaterialListTabletScreen(ItemStack tablet) {
         super(Component.literal("MATERIAL LIST TABLET"));
@@ -38,16 +42,19 @@ public final class MaterialListTabletScreen extends Screen {
         total = tag.getIntOr("QTMaterialTotal", 0);
         String encoded = tag.getString("QTMaterials").orElse("");
         for (String token : encoded.split(";")) {
-            int split = token.lastIndexOf('=');
-            if (split <= 0) continue;
+            String[] fields = token.split("=");
+            if (fields.length < 2) continue;
             try {
-                Identifier id = Identifier.parse(token.substring(0, split));
-                int count = Integer.parseInt(token.substring(split + 1));
+                Identifier id = Identifier.parse(fields[0]);
+                int count = Integer.parseInt(fields[1]);
+                int available = fields.length >= 3 ? Integer.parseInt(fields[2]) : 0;
                 var block = BuiltInRegistries.BLOCK.getValue(id);
-                rows.add(new MaterialRow(block.getName().getString(), count));
+                rows.add(new MaterialRow(block.getName().getString(), count, available,
+                        new ItemStack(block.asItem())));
             } catch (RuntimeException ignored) {
             }
         }
+        applyFilter(Filter.ALL);
     }
 
     @Override
@@ -57,10 +64,45 @@ public final class MaterialListTabletScreen extends Screen {
         int top = (height - PANEL_H) / 2;
         addRenderableWidget(new QuantumButton(left + PANEL_W - 23, top + 7, 16, 16,
                 Component.literal("×"), this::closeTablet, () -> false, QuantumUiTheme.RED));
+        addRenderableWidget(new QuantumButton(left + 18, top + 68, 50, 14,
+                Component.literal("ALL"), () -> applyFilter(Filter.ALL), () -> filter == Filter.ALL, QuantumUiTheme.CYAN));
+        addRenderableWidget(new QuantumButton(left + 72, top + 68, 60, 14,
+                Component.literal("MISSING"), () -> applyFilter(Filter.MISSING), () -> filter == Filter.MISSING, QuantumUiTheme.RED));
+        addRenderableWidget(new QuantumButton(left + 136, top + 68, 71, 14,
+                Component.literal("AVAILABLE"), () -> applyFilter(Filter.AVAILABLE), () -> filter == Filter.AVAILABLE, QuantumUiTheme.GREEN));
+        upButton = addRenderableWidget(new QuantumButton(left + PANEL_W - 17, top + 88, 10, 16,
+                Component.literal("▲"), () -> scroll(-1), () -> false, QuantumUiTheme.CYAN));
+        downButton = addRenderableWidget(new QuantumButton(left + PANEL_W - 17, top + 248, 10, 16,
+                Component.literal("▼"), () -> scroll(1), () -> false, QuantumUiTheme.CYAN));
+        updateScrollButtons();
     }
 
     private void closeTablet() {
-        Minecraft.getInstance().setScreen(null);
+        onClose();
+    }
+
+    private void applyFilter(Filter requested) {
+        filter = requested;
+        filteredRows.clear();
+        for (MaterialRow row : rows) {
+            if (requested == Filter.ALL
+                    || requested == Filter.MISSING && row.available() < row.required()
+                    || requested == Filter.AVAILABLE && row.available() >= row.required()) {
+                filteredRows.add(row);
+            }
+        }
+        scroll = 0;
+        updateScrollButtons();
+    }
+
+    private void scroll(int direction) {
+        scroll = Math.max(0, Math.min(Math.max(0, filteredRows.size() - 8), scroll + direction));
+        updateScrollButtons();
+    }
+
+    private void updateScrollButtons() {
+        if (upButton != null) upButton.active = scroll > 0;
+        if (downButton != null) downButton.active = scroll + 8 < filteredRows.size();
     }
 
     @Override
@@ -80,40 +122,58 @@ public final class MaterialListTabletScreen extends Screen {
                         : "Insert this tablet in the Constructor input"),
                 left + 20, top + 57, QuantumUiTheme.TEXT_SOFT, false);
 
-        QuantumUiTheme.panel(gui, left + 18, top + 68, left + 68, top + 82, QuantumUiTheme.CYAN, 0xFF0A2029);
-        gui.text(font, Component.literal("ALL"), left + 34, top + 71, QuantumUiTheme.CYAN, false);
-        QuantumUiTheme.panel(gui, left + 72, top + 68, left + 132, top + 82, QuantumUiTheme.BORDER_DIM, 0xFF0A151C);
-        gui.text(font, Component.literal("MISSING"), left + 79, top + 71, QuantumUiTheme.TEXT_SOFT, false);
-        QuantumUiTheme.panel(gui, left + 136, top + 68, left + 207, top + 82, QuantumUiTheme.BORDER_DIM, 0xFF0A151C);
-        gui.text(font, Component.literal("AVAILABLE"), left + 142, top + 71, QuantumUiTheme.TEXT_SOFT, false);
-
         int rowY = top + 88;
         for (int row = 0; row < 8; row++) {
+            int index = scroll + row;
             int y = rowY + row * 22;
             QuantumUiTheme.panel(gui, left + 18, y, left + PANEL_W - 28, y + 19,
                     QuantumUiTheme.BORDER_DIM, row % 2 == 0 ? 0xFF0A1820 : 0xFF0C1C25);
-            QuantumUiTheme.slotFrame(gui, left + 21, y + 1, row < rows.size(), QuantumUiTheme.CYAN);
-            if (row < rows.size()) {
-                MaterialRow material = rows.get(row);
+            QuantumUiTheme.slotFrame(gui, left + 21, y + 1, index < filteredRows.size(), QuantumUiTheme.CYAN);
+            if (index < filteredRows.size()) {
+                MaterialRow material = filteredRows.get(index);
+                gui.fakeItem(material.stack(), left + 22, y + 2);
                 gui.text(font, Component.literal(trim(material.name(), 20)), left + 47, y + 4,
                         QuantumUiTheme.TEXT, false);
-                gui.text(font, Component.literal("0 / " + material.required()), left + 47, y + 11,
-                        QuantumUiTheme.RED, false);
+                int color = material.available() >= material.required() ? QuantumUiTheme.GREEN
+                        : material.available() > 0 ? QuantumUiTheme.AMBER : QuantumUiTheme.RED;
+                gui.text(font, Component.literal(material.available() + " / " + material.required()), left + 47, y + 11,
+                        color, false);
             }
         }
 
         // Thin textured scrollbar from the sketch.
         int sx = left + PANEL_W - 13;
         gui.fill(sx, top + 34, sx + 4, top + PANEL_H - 16, QuantumUiTheme.DEEP);
-        gui.fill(sx + 1, top + 36, sx + 3, top + 92, QuantumUiTheme.CYAN_DIM);
-        gui.fill(sx + 1, top + 38, sx + 2, top + 90, QuantumUiTheme.CYAN);
+        int trackTop = top + 106;
+        int trackBottom = top + 246;
+        int maxScroll = Math.max(0, filteredRows.size() - 8);
+        int thumbHeight = maxScroll == 0 ? trackBottom - trackTop : Math.max(12,
+                (trackBottom - trackTop) * 8 / Math.max(8, filteredRows.size()));
+        int thumbY = maxScroll == 0 ? trackTop
+                : trackTop + scroll * (trackBottom - trackTop - thumbHeight) / maxScroll;
+        gui.fill(sx + 1, thumbY, sx + 3, thumbY + thumbHeight, QuantumUiTheme.CYAN_DIM);
+        gui.fill(sx + 1, thumbY + 1, sx + 2, thumbY + thumbHeight - 1, QuantumUiTheme.CYAN);
     }
 
     private static String trim(String value, int max) {
         return value.length() <= max ? value : value.substring(0, max - 1) + "…";
     }
 
-    private record MaterialRow(String name, int required) {}
+    private record MaterialRow(String name, int required, int available, ItemStack stack) {}
+
+    private enum Filter { ALL, MISSING, AVAILABLE }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        int left = (width - PANEL_W) / 2;
+        int top = (height - PANEL_H) / 2;
+        if (mouseX >= left + 11 && mouseX < left + PANEL_W - 7
+                && mouseY >= top + 84 && mouseY < top + PANEL_H - 13 && scrollY != 0) {
+            scroll(scrollY > 0 ? -1 : 1);
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
 
     @Override
     public boolean isPauseScreen() {

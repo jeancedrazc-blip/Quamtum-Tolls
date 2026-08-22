@@ -366,9 +366,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             tag.putString("QTSchematicName", SchematicCardItem.sourceName(schematicCard()));
             tag.putInt("QTMaterialKinds", counts.size());
             tag.putInt("QTMaterialTotal", plan.blockCount());
-            StringBuilder encoded = new StringBuilder();
-            counts.forEach((id, count) -> encoded.append(id).append('=').append(count).append(';'));
-            tag.putString("QTMaterials", encoded.toString());
+            tag.putString("QTMaterials", encodeMaterials(counts));
             ItemStack written = tabletInput().copyWithCount(1);
             written.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
                     net.minecraft.world.item.component.CustomData.of(tag));
@@ -391,9 +389,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             net.minecraft.nbt.CompoundTag tag = tablet.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA).copyTag();
             tag.putInt("QTMaterialKinds", counts.size());
             tag.putInt("QTMaterialTotal", plan.blockCount());
-            StringBuilder encoded = new StringBuilder();
-            counts.forEach((id, count) -> encoded.append(id).append('=').append(count).append(';'));
-            tag.putString("QTMaterials", encoded.toString());
+            tag.putString("QTMaterials", encodeMaterials(counts));
             tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
                     net.minecraft.world.item.component.CustomData.of(tag));
         } catch (IOException | RuntimeException ignored) {
@@ -410,6 +406,24 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             counts.merge(id, 1, Integer::sum);
         }
         return counts;
+    }
+
+    private String encodeMaterials(java.util.Map<String, Integer> counts) {
+        StringBuilder encoded = new StringBuilder();
+        for (var entry : counts.entrySet()) {
+            int available = 0;
+            try {
+                var id = net.minecraft.resources.Identifier.parse(entry.getKey());
+                Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
+                if (level instanceof ServerLevel server && block != null) {
+                    available = ConstructorMaterialAccess.countAvailable(server, worldPosition, block.asItem());
+                }
+            } catch (RuntimeException ignored) {
+            }
+            encoded.append(entry.getKey()).append('=').append(entry.getValue())
+                    .append('=').append(available).append(';');
+        }
+        return encoded.toString();
     }
 
     public static void tick(Level level, BlockPos pos, BlockState blockState, ConstructorBlockEntity be) {

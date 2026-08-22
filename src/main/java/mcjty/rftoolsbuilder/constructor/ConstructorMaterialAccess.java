@@ -4,6 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.transfer.ResourceHandler;
 import net.neoforged.neoforge.transfer.item.ItemResource;
@@ -27,6 +28,23 @@ final class ConstructorMaterialAccess {
 
     static Result consume(ServerLevel level, BlockPos machinePos, ConstructorRequirement requirement) {
         return execute(level, machinePos, requirement, true);
+    }
+
+    /** Non-mutating snapshot used by written material tablets. */
+    static int countAvailable(ServerLevel level, BlockPos machinePos, Item item) {
+        if (item == null) return 0;
+        long total = 0;
+        for (ResourceHandler<ItemResource> handler : adjacentHandlers(level, machinePos)) {
+            for (int slot = 0; slot < handler.size(); slot++) {
+                ItemResource resource = handler.getResource(slot);
+                if (resource == null || resource.isEmpty()) continue;
+                ItemStack candidate = resource.toStack();
+                if (!candidate.is(item)) continue;
+                total += Math.max(0, handler.getAmountAsInt(slot));
+                if (total >= Integer.MAX_VALUE) return Integer.MAX_VALUE;
+            }
+        }
+        return (int) total;
     }
 
     private static Result execute(ServerLevel level, BlockPos machinePos, ConstructorRequirement requirement, boolean commit) {

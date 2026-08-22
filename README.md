@@ -4,7 +4,7 @@ Source repository for the Minecraft **26.1.2 / NeoForge** mod **Quantum Tools**.
 
 ## Current development state
 
-- Source version: **3.0.6-dev.10**
+- Source version: **3.0.6-dev.11**
 - Minecraft: **26.1.2**
 - NeoForge: **26.1.2.95**
 - Java toolchain: **25**

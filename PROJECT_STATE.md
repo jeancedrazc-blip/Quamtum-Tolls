@@ -4,7 +4,7 @@
 
 The editable GitHub source is the source of truth for Quantum Tools development.
 
-- Active source version: **3.0.6-dev.10**
+- Active source version: **3.0.6-dev.11**
 - Stable `main`: **3.0.6-dev.9**
 - Minecraft: **26.1.2**
 - Loader: **NeoForge 26.1.2.95**
@@ -25,7 +25,7 @@ The user-approved Constructor visual is **V5** and remains frozen. Schematic, UI
 
 The active stage is **schematic placement and Quantum UI runtime validation**.
 
-Implemented in the current dev.10 feature branch:
+Implemented in the current dev.11 feature branch:
 
 - mouse/UI-first placement with no mandatory conflicting keybinds;
 - deploy, horizontal move, vertical move, rotate, mirror and precise modes;
@@ -38,6 +38,8 @@ Implemented in the current dev.10 feature branch:
 - persistent replace mode, skip-missing and Block Entity policy controls;
 - corrected 14-field Constructor menu synchronization;
 - complete editable Builder/Quarry reconstruction in the dev.10 integration base.
+- complete scrollable Constructor material list with modal replacement/settings panels;
+- scrollable Material List Tablet with real icons and adjacent inventory availability snapshots.
 
 ## Verified
 

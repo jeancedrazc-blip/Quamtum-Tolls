@@ -37,13 +37,11 @@ import java.io.IOException;
 public final class ConstructorBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity implements MenuProvider, Container {
     public static final int ENERGY_CAPACITY = 5_000_000;
     public static final int MAX_RECEIVE = 250_000;
-    public static final int BASE_PLACEMENT_COST = 1_000;
-    public static final int DISTANCE_COST = 15;
-    public static final int BLOCK_ENTITY_SURCHARGE = 1_500;
-    public static final int ENTITY_SURCHARGE = 750;
+    public static final int ENERGY_BLOCK_INTERVAL = 500;
     public static final int AIM_TICKS = 4;
     public static final int CHARGE_TICKS = 5;
     public static final int MIN_FLIGHT_TICKS = 10;
+    public static final int MIN_SCALED_FLIGHT_TICKS = 3;
     public static final int SHOT_COOLDOWN_TICKS = 4;
     public static final int TABLET_SCAN_TICKS = 24;
     public static final int MAX_TARGET_DISTANCE = 256;
@@ -56,8 +54,10 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
 
     private ConstructorStatus status = ConstructorStatus.IDLE;
     private ConstructorReplaceMode replaceMode = ConstructorReplaceMode.REPLACE_ANY;
+    private ConstructorSpeed speed = ConstructorSpeed.NORMAL;
     private boolean skipMissing;
     private boolean replaceBlockEntities;
+    private int energyBlockProgress;
 
     private BlockPos targetPos;
     private BlockState targetState;
@@ -99,11 +99,13 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 case 16 -> energy.getMaxEnergyStored() & 0xFFFF;
                 case 17 -> energy.getMaxEnergyStored() >>> 16;
                 case 18 -> tabletScanProgress;
+                case 19 -> speed.ordinal();
+                case 20 -> energyBlockProgress;
                 default -> 0;
             };
         }
         @Override public void set(int index, int value) {}
-        @Override public int getCount() { return 19; }
+        @Override public int getCount() { return 21; }
     };
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
@@ -113,8 +115,16 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     public ConstructorEnergyStorage energyStorage() { return energy; }
     public int storedEnergy() { return energy.getEnergyStored(); }
     public void restoreEnergy(int amount) { energy.setStored(amount); setChangedAndSync(); }
+    public void restorePortableState(int amount, int speedOrdinal, int blockProgress) {
+        energy.setStored(amount);
+        speed = ConstructorSpeed.byOrdinal(speedOrdinal);
+        energyBlockProgress = Math.floorMod(blockProgress, ENERGY_BLOCK_INTERVAL);
+        setChangedAndSync();
+    }
     public ConstructorStatus status() { return status; }
     public ConstructorReplaceMode replaceMode() { return replaceMode; }
+    public ConstructorSpeed speed() { return speed; }
+    public int energyBlockProgress() { return energyBlockProgress; }
     public boolean skipMissing() { return skipMissing; }
     public boolean replaceBlockEntities() { return replaceBlockEntities; }
     public BlockPos targetPos() { return targetPos; }
@@ -124,7 +134,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         return !reservedPlacementStack.isEmpty() ? reservedPlacementStack : entityVisualStack;
     }
     public int shotProgress() { return shotProgress; }
-    public int flightTicks() { return Math.max(MIN_FLIGHT_TICKS, flightTicks); }
+    public int flightTicks() { return Math.max(MIN_SCALED_FLIGHT_TICKS, flightTicks); }
     public boolean shotReserved() { return shotReserved; }
     public boolean isRunning() { return running; }
     public ItemStack missingItem() { return missingItem; }
@@ -353,6 +363,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 setChangedAndSync();
                 yield true;
             }
+            case 13 -> { speed = speed.next(); setChangedAndSync(); yield true; }
             default -> false;
         };
     }
@@ -529,13 +540,13 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 transition(ConstructorStatus.AIMING);
             }
             case AIMING -> {
-                if (++phaseTick >= AIM_TICKS) {
+                if (++phaseTick >= scaledTicks(AIM_TICKS)) {
                     phaseTick = 0;
                     transition(ConstructorStatus.CHARGING);
                 }
             }
             case CHARGING -> {
-                if (++phaseTick >= CHARGE_TICKS) {
+                if (++phaseTick >= scaledTicks(CHARGE_TICKS)) {
                     if (!reserveShot(level)) return;
                     phaseTick = 0;
                     shotProgress = 0;
@@ -681,7 +692,6 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             if (skipMissing) skipCurrentAndAdvance(); else transition(ConstructorStatus.WAITING_MATERIAL);
             return false;
         }
-        energy.consume(cost);
         reservedPlacementStack = material.placementStack();
         missingItem = ItemStack.EMPTY;
         shotReserved = true;
@@ -697,6 +707,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             shotReserved = false;
             reservedPlacementStack = ItemStack.EMPTY;
             if (!spawned) { failJob(ConstructorStatus.ERROR); return; }
+            consumeCompletedPlacementEnergy();
             finishCurrentAndAdvance(flightTicks());
             return;
         }
@@ -712,6 +723,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
         if (!placed) { failJob(ConstructorStatus.ERROR); return; }
+        consumeCompletedPlacementEnergy();
         finishCurrentAndAdvance(flightTicks());
     }
 
@@ -736,7 +748,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     private void finishCurrentAndAdvance(int finishedShotProgress) {
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
-        shotCooldown = SHOT_COOLDOWN_TICKS;
+        shotCooldown = scaledCooldown();
         if (activeJob != null) {
             boolean more = targetIsEntity ? activeJob.advanceEntity() : activeJob.advanceBlock();
             if (more) {
@@ -777,16 +789,29 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private int energyCost(BlockPos target, boolean entity, boolean blockEntity) {
-        double distance = Math.sqrt(worldPosition.distSqr(target));
-        int cost = BASE_PLACEMENT_COST + (int) Math.ceil(distance * DISTANCE_COST);
-        if (blockEntity) cost += BLOCK_ENTITY_SURCHARGE;
-        if (entity) cost += ENTITY_SURCHARGE;
-        return cost;
+        return energyBlockProgress >= ENERGY_BLOCK_INTERVAL - 1 ? 1 : 0;
     }
 
     private int ticksForDistance(BlockPos target) {
         double distSqr = target.distSqr(worldPosition);
-        return Math.max(MIN_FLIGHT_TICKS, (int) (Math.sqrt(Math.sqrt(distSqr)) * 4.0));
+        int normal = Math.max(MIN_FLIGHT_TICKS, (int) (Math.sqrt(Math.sqrt(distSqr)) * 4.0));
+        return Math.max(MIN_SCALED_FLIGHT_TICKS, (normal + speed.multiplier() - 1) / speed.multiplier());
+    }
+
+    private int scaledTicks(int normalTicks) {
+        return Math.max(1, (normalTicks + speed.multiplier() - 1) / speed.multiplier());
+    }
+
+    private int scaledCooldown() {
+        return Math.max(0, SHOT_COOLDOWN_TICKS / speed.multiplier());
+    }
+
+    private void consumeCompletedPlacementEnergy() {
+        energyBlockProgress++;
+        if (energyBlockProgress >= ENERGY_BLOCK_INTERVAL) {
+            energyBlockProgress = 0;
+            energy.consume(1);
+        }
     }
 
     private void transition(ConstructorStatus next) {
@@ -813,6 +838,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         output.putInt("Energy", energy.getEnergyStored());
         output.putInt("Status", status.ordinal());
         output.putInt("ReplaceMode", replaceMode.ordinal());
+        output.putInt("Speed", speed.ordinal());
+        output.putInt("EnergyBlockProgress", energyBlockProgress);
         output.putBoolean("SkipMissing", skipMissing);
         output.putBoolean("ReplaceBlockEntities", replaceBlockEntities);
         output.putBoolean("Running", running);
@@ -843,6 +870,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         status = ConstructorStatus.values()[Math.max(0, Math.min(ConstructorStatus.values().length - 1, s))];
         int mode = input.getIntOr("ReplaceMode", ConstructorReplaceMode.REPLACE_ANY.ordinal());
         replaceMode = ConstructorReplaceMode.values()[Math.max(0, Math.min(ConstructorReplaceMode.values().length - 1, mode))];
+        speed = ConstructorSpeed.byOrdinal(input.getIntOr("Speed", ConstructorSpeed.NORMAL.ordinal()));
+        energyBlockProgress = Math.floorMod(input.getIntOr("EnergyBlockProgress", 0), ENERGY_BLOCK_INTERVAL);
         skipMissing = input.getBooleanOr("SkipMissing", false);
         replaceBlockEntities = input.getBooleanOr("ReplaceBlockEntities", false);
         running = input.getBooleanOr("Running", false);
@@ -851,7 +880,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         targetIsEntity = input.getBooleanOr("TargetIsEntity", false);
         phaseTick = Math.max(0, input.getIntOr("PhaseTick", 0));
         shotProgress = Math.max(0, input.getIntOr("ShotProgress", 0));
-        flightTicks = Math.max(MIN_FLIGHT_TICKS, input.getIntOr("FlightTicks", MIN_FLIGHT_TICKS));
+        flightTicks = Math.max(MIN_SCALED_FLIGHT_TICKS, input.getIntOr("FlightTicks", MIN_FLIGHT_TICKS));
         shotCooldown = Math.max(0, input.getIntOr("ShotCooldown", 0));
         long packed = input.getLongOr("TargetPos", Long.MIN_VALUE);
         targetPos = packed == Long.MIN_VALUE ? null : BlockPos.of(packed);

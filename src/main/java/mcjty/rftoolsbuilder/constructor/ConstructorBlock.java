@@ -110,13 +110,15 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
     protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
         List<ItemStack> drops = super.getDrops(state, params);
         BlockEntity blockEntity = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
-        if (blockEntity instanceof ConstructorBlockEntity constructor && constructor.storedEnergy() > 0) {
+        if (blockEntity instanceof ConstructorBlockEntity constructor) {
             for (ItemStack drop : drops) {
                 if (!drop.is(this.asItem())) continue;
                 CompoundTag tag = new CompoundTag();
                 CustomData existing = drop.get(DataComponents.CUSTOM_DATA);
                 if (existing != null) tag = existing.copyTag();
                 tag.putInt("QTEnergy", constructor.storedEnergy());
+                tag.putInt("QTSpeed", constructor.speed().ordinal());
+                tag.putInt("QTEnergyBlockProgress", constructor.energyBlockProgress());
                 drop.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
                 break;
             }
@@ -129,7 +131,9 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
         super.setPlacedBy(level, pos, state, placer, stack);
         CustomData data = stack.get(DataComponents.CUSTOM_DATA);
         if (!level.isClientSide() && data != null && level.getBlockEntity(pos) instanceof ConstructorBlockEntity constructor) {
-            constructor.restoreEnergy(data.copyTag().getIntOr("QTEnergy", 0));
+            CompoundTag tag = data.copyTag();
+            constructor.restorePortableState(tag.getIntOr("QTEnergy", 0), tag.getIntOr("QTSpeed", 0),
+                    tag.getIntOr("QTEnergyBlockProgress", 0));
         }
     }
 }

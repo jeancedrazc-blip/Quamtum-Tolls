@@ -81,7 +81,7 @@ public final class ConstructorNetworking {
                 ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND;
         ItemStack tablet = player.getItemInHand(hand);
         if (!(tablet.getItem() instanceof MaterialListTabletItem)) return;
-        String status = MaterialListTabletItem.refreshFromLinkedConstructor(player.level(), tablet);
+        String status = MaterialListTabletItem.refreshFromLinkedConstructor(player.level(), tablet, player.blockPosition());
         CustomData data = tablet.get(DataComponents.CUSTOM_DATA);
         if (data == null) return;
         var tag = data.copyTag();

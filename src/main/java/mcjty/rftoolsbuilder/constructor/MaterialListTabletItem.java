@@ -34,16 +34,51 @@ public final class MaterialListTabletItem extends Item {
         if (data == null) return "BLANK";
         var tag = data.copyTag();
         String linkedDimension = tag.getString("QTConstructorDimension").orElse("");
-        if (linkedDimension.isBlank()) return "UNLINKED";
+        if (linkedDimension.isBlank() || tag.getLongOr("QTConstructorPos", Long.MIN_VALUE) == Long.MIN_VALUE) return "UNLINKED";
         if (!linkedDimension.equals(level.dimension().identifier().toString())) return "OTHER DIMENSION";
         long packed = tag.getLongOr("QTConstructorPos", Long.MIN_VALUE);
         if (packed == Long.MIN_VALUE) return "UNLINKED";
         BlockPos pos = BlockPos.of(packed);
         if (!level.hasChunkAt(pos)) return "CONSTRUCTOR OFFLINE";
         if (level.getBlockEntity(pos) instanceof ConstructorBlockEntity constructor) {
-            return constructor.refreshTabletAvailability(tablet) ? "LIVE" : "READ ERROR";
+            return constructor.refreshTabletFromCurrentSchematic(tablet);
         }
         return "CONSTRUCTOR NOT FOUND";
+    }
+
+    static String refreshFromLinkedConstructor(ServerLevel level, ItemStack tablet, BlockPos playerPos) {
+        CustomData data = tablet.get(DataComponents.CUSTOM_DATA);
+        if (data == null) return "BLANK";
+        var tag = data.copyTag();
+        if (tag.getString("QTConstructorDimension").orElse("").isBlank()
+                || tag.getLongOr("QTConstructorPos", Long.MIN_VALUE) == Long.MIN_VALUE) {
+            BlockPos nearest = findNearestConstructor(level, playerPos);
+            if (nearest == null) return "UNLINKED";
+            tag.putString("QTConstructorDimension", level.dimension().identifier().toString());
+            tag.putLong("QTConstructorPos", nearest.asLong());
+            tablet.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        }
+        return refreshFromLinkedConstructor(level, tablet);
+    }
+
+    private static BlockPos findNearestConstructor(ServerLevel level, BlockPos center) {
+        BlockPos best = null;
+        double bestDistance = Double.MAX_VALUE;
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int y = -8; y <= 8; y++) {
+            for (int x = -16; x <= 16; x++) {
+                for (int z = -16; z <= 16; z++) {
+                    cursor.set(center.getX() + x, center.getY() + y, center.getZ() + z);
+                    double distance = x * x + y * y + z * z;
+                    if (distance >= bestDistance || !level.hasChunkAt(cursor)) continue;
+                    if (level.getBlockEntity(cursor) instanceof ConstructorBlockEntity) {
+                        bestDistance = distance;
+                        best = cursor.immutable();
+                    }
+                }
+            }
+        }
+        return best;
     }
 
     public static boolean isWritten(ItemStack stack) {

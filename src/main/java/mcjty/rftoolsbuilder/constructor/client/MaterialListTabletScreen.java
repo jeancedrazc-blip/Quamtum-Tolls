@@ -64,6 +64,31 @@ public final class MaterialListTabletScreen extends Screen {
         dataSignature = encoded;
     }
 
+    public void applyServerData(String name, int blockTotal, String encoded) {
+        this.schematicName = name;
+        this.total = blockTotal;
+        readEncodedMaterials(encoded);
+    }
+
+    private void readEncodedMaterials(String encoded) {
+        rows.clear();
+        for (String token : encoded.split(";")) {
+            String[] fields = token.split("=");
+            if (fields.length < 2) continue;
+            try {
+                Identifier id = Identifier.parse(fields[0]);
+                int count = Integer.parseInt(fields[1]);
+                int available = fields.length >= 3 ? Integer.parseInt(fields[2]) : 0;
+                var block = BuiltInRegistries.BLOCK.getValue(id);
+                rows.add(new MaterialRow(block.getName().getString(), count, available,
+                        new ItemStack(block.asItem())));
+            } catch (RuntimeException ignored) {
+            }
+        }
+        applyFilter(filter);
+        dataSignature = encoded;
+    }
+
     @Override
     protected void init() {
         super.init();

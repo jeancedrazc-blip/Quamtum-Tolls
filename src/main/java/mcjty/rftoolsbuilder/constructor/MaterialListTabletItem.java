@@ -29,19 +29,21 @@ public final class MaterialListTabletItem extends Item {
         return InteractionResult.SUCCESS;
     }
 
-    static void refreshFromLinkedConstructor(ServerLevel level, ItemStack tablet) {
+    static String refreshFromLinkedConstructor(ServerLevel level, ItemStack tablet) {
         CustomData data = tablet.get(DataComponents.CUSTOM_DATA);
-        if (data == null) return;
+        if (data == null) return "BLANK";
         var tag = data.copyTag();
         String linkedDimension = tag.getString("QTConstructorDimension").orElse("");
-        if (!linkedDimension.equals(level.dimension().identifier().toString())) return;
+        if (linkedDimension.isBlank()) return "UNLINKED";
+        if (!linkedDimension.equals(level.dimension().identifier().toString())) return "OTHER DIMENSION";
         long packed = tag.getLongOr("QTConstructorPos", Long.MIN_VALUE);
-        if (packed == Long.MIN_VALUE) return;
+        if (packed == Long.MIN_VALUE) return "UNLINKED";
         BlockPos pos = BlockPos.of(packed);
-        if (!level.hasChunkAt(pos)) return;
+        if (!level.hasChunkAt(pos)) return "CONSTRUCTOR OFFLINE";
         if (level.getBlockEntity(pos) instanceof ConstructorBlockEntity constructor) {
-            constructor.refreshMaterialTablet(tablet);
+            return constructor.refreshTabletAvailability(tablet) ? "LIVE" : "READ ERROR";
         }
+        return "CONSTRUCTOR NOT FOUND";
     }
 
     public static boolean isWritten(ItemStack stack) {

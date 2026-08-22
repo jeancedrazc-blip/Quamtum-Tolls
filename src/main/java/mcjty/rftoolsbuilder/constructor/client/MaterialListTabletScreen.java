@@ -7,6 +7,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -18,7 +19,8 @@ import java.util.List;
 public final class MaterialListTabletScreen extends Screen {
     private static final int PANEL_W = 246;
     private static final int PANEL_H = 286;
-    private final ItemStack tablet;
+    private ItemStack tablet;
+    private final InteractionHand hand;
     private final List<MaterialRow> rows = new ArrayList<>();
     private final List<MaterialRow> filteredRows = new ArrayList<>();
     private String schematicName = "-";
@@ -28,13 +30,17 @@ public final class MaterialListTabletScreen extends Screen {
     private QuantumButton upButton;
     private QuantumButton downButton;
 
-    public MaterialListTabletScreen(ItemStack tablet) {
+    private String dataSignature = "";
+
+    public MaterialListTabletScreen(ItemStack tablet, InteractionHand hand) {
         super(Component.literal("MATERIAL LIST TABLET"));
         this.tablet = tablet;
+        this.hand = hand;
         readTablet();
     }
 
     private void readTablet() {
+        rows.clear();
         CustomData data = tablet.get(DataComponents.CUSTOM_DATA);
         if (data == null) return;
         var tag = data.copyTag();
@@ -55,6 +61,7 @@ public final class MaterialListTabletScreen extends Screen {
             }
         }
         applyFilter(Filter.ALL);
+        dataSignature = encoded;
     }
 
     @Override
@@ -153,6 +160,24 @@ public final class MaterialListTabletScreen extends Screen {
                 : trackTop + scroll * (trackBottom - trackTop - thumbHeight) / maxScroll;
         gui.fill(sx + 1, thumbY, sx + 3, thumbY + thumbHeight, QuantumUiTheme.CYAN_DIM);
         gui.fill(sx + 1, thumbY + 1, sx + 2, thumbY + thumbHeight - 1, QuantumUiTheme.CYAN);
+
+        // Screen owns widget extraction. Without this call every button disappears,
+        // including close/filter/scroll controls, and item rendering is not finalized.
+        super.extractRenderState(gui, mouseX, mouseY, partialTick);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (minecraft == null || minecraft.player == null) return;
+        ItemStack current = minecraft.player.getItemInHand(hand);
+        if (!(current.getItem() instanceof MaterialListTabletItem)) return;
+        CustomData data = current.get(DataComponents.CUSTOM_DATA);
+        String signature = data == null ? "" : data.copyTag().getString("QTMaterials").orElse("");
+        if (!signature.equals(dataSignature)) {
+            tablet = current;
+            readTablet();
+        }
     }
 
     private static String trim(String value, int max) {

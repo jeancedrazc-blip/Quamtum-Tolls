@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="rftoolsbuilder"
-version="3.0.6-dev.18"
+version="3.0.6-dev.19"
 displayName="Quantum Tools"
 authors="McJty (original); Jean Cedraz / Desertic0 (26.1.2 port)"
 description='''

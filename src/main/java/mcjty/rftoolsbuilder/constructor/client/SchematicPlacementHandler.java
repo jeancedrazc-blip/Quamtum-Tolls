@@ -24,6 +24,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.common.NeoForge;
@@ -32,6 +33,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Client-side schematic deployment editor.
@@ -69,7 +71,8 @@ public final class SchematicPlacementHandler {
         installed = true;
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onClientTick);
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onMouseButton);
-        NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onMouseScroll);
+        NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onKey);
+        NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onRenderGui);
         NeoForge.EVENT_BUS.addListener(SchematicPlacementHandler::onSubmitGeometry);
     }
 
@@ -118,13 +121,13 @@ public final class SchematicPlacementHandler {
         ItemStack card = currentCard(mc);
         if (!isWrittenCard(card)) return;
 
-        event.setCanceled(true);
         ensurePlan(card);
 
         // Create-style interaction without a dedicated key binding:
         // first use deploys directly into the world and keeps the hologram
         // active. A deployed card only opens its editor deliberately.
         if (!SchematicCardItem.deployed(card)) {
+            event.setCanceled(true);
             beginEditing(card, mc);
             if (confirm()) {
                 message("Schematic positioned — sneak + right-click to edit");
@@ -132,10 +135,32 @@ public final class SchematicPlacementHandler {
             return;
         }
 
-        if (mc.player.isShiftKeyDown()) {
-            beginEditing(card, mc);
+        // A deployed card is edited through the compact ALT panel. Right-click
+        // remains free for normal world interaction after placement.
+    }
+
+    private static void onKey(InputEvent.Key event) {
+        if (event.getKey() != GLFW.GLFW_KEY_LEFT_ALT && event.getKey() != GLFW.GLFW_KEY_RIGHT_ALT) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (event.getAction() == GLFW.GLFW_PRESS) {
+            if (mc.player == null || mc.level == null || mc.screen != null) return;
+            ItemStack card = currentCard(mc);
+            if (!isWrittenCard(card) || !SchematicCardItem.deployed(card)) return;
+            ensurePlan(card);
+            if (!editing) beginEditing(card, mc);
             mc.setScreen(new SchematicPlacementScreen());
+        } else if (event.getAction() == GLFW.GLFW_RELEASE && mc.screen instanceof SchematicPlacementScreen screen) {
+            screen.suspendForAltRelease();
         }
+    }
+
+    private static void onRenderGui(RenderGuiEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null || mc.screen instanceof SchematicPlacementScreen) return;
+        ItemStack card = currentCard(mc);
+        if (!isWrittenCard(card) || !SchematicCardItem.deployed(card)) return;
+        SchematicPlacementScreen.drawCompactPanel(event.getGuiGraphics(), mc.font,
+                mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight(), false);
     }
 
     /**
@@ -354,6 +379,17 @@ public final class SchematicPlacementHandler {
     public static void nudge(int dx, int dy, int dz) {
         if (!editing) return;
         editAnchor = editAnchor.offset(dx, dy, dz);
+    }
+
+    /** Moves one block relative to the player's current horizontal view. */
+    public static void nudgeView(int forward, int right) {
+        if (!editing) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        var facing = mc.player.getDirection();
+        int dx = facing.getStepX() * forward - facing.getStepZ() * right;
+        int dz = facing.getStepZ() * forward + facing.getStepX() * right;
+        nudge(dx, 0, dz);
     }
 
     /** Move in schematic-local X/Z space, honoring mirror and rotation. */

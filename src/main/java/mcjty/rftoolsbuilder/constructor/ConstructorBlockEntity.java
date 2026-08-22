@@ -111,6 +111,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     public ConstructorEnergyStorage energyStorage() { return energy; }
+    public int storedEnergy() { return energy.getEnergyStored(); }
+    public void restoreEnergy(int amount) { energy.setStored(amount); setChangedAndSync(); }
     public ConstructorStatus status() { return status; }
     public ConstructorReplaceMode replaceMode() { return replaceMode; }
     public boolean skipMissing() { return skipMissing; }
@@ -357,7 +359,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
 
     private boolean writeMaterialTablet() {
         if (!(tabletInput().getItem() instanceof MaterialListTabletItem)
-                || MaterialListTabletItem.isWritten(tabletInput()) || !tabletOutput().isEmpty()
+                || !tabletOutput().isEmpty()
                 || !SchematicCardItem.hasSource(schematicCard())) return false;
         try {
             ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
@@ -431,6 +433,38 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             return true;
         } catch (RuntimeException ignored) {
             return false;
+        }
+    }
+
+    /** Makes a linked tablet a live monitor of this Constructor's current schematic. */
+    public String refreshTabletFromCurrentSchematic(ItemStack tablet) {
+        if (!(tablet.getItem() instanceof MaterialListTabletItem) || !(level instanceof ServerLevel)) return "READ ERROR";
+        var existing = tablet.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        CompoundTag tag = existing == null ? new CompoundTag() : existing.copyTag();
+        tag.putString("QTConstructorDimension", level.dimension().identifier().toString());
+        tag.putLong("QTConstructorPos", worldPosition.asLong());
+        if (!SchematicCardItem.hasSource(schematicCard())) {
+            tag.putString("QTSchematicName", "NO SCHEMATIC");
+            tag.putInt("QTMaterialKinds", 0);
+            tag.putInt("QTMaterialTotal", 0);
+            tag.putString("QTMaterials", "");
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            return "NO SCHEMATIC";
+        }
+        try {
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
+            java.util.Map<String, Integer> counts = materialCounts(plan);
+            tag.putString("QTSchematicName", SchematicCardItem.sourceName(schematicCard()));
+            tag.putInt("QTMaterialKinds", counts.size());
+            tag.putInt("QTMaterialTotal", plan.blockCount());
+            tag.putString("QTMaterials", encodeMaterials(counts));
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            return status == ConstructorStatus.COMPLETE ? "COMPLETE"
+                    : status == ConstructorStatus.PAUSED ? "PAUSED" : "LIVE";
+        } catch (IOException | RuntimeException ignored) {
+            return "READ ERROR";
         }
     }
 
@@ -514,7 +548,6 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
 
     private void tickMaterialTabletWriter() {
         boolean ready = tabletInput().getItem() instanceof MaterialListTabletItem
-                && !MaterialListTabletItem.isWritten(tabletInput())
                 && tabletOutput().isEmpty()
                 && SchematicCardItem.hasSource(schematicCard());
         if (!ready) {
@@ -882,7 +915,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         if (slot < 0 || slot >= items.size()) return;
         if (slot == SLOT_SCHEMATIC && (!canRemoveCard() && !ItemStack.matches(schematicCard(), stack))) return;
         if (slot == SLOT_TABLET_INPUT && !stack.isEmpty()
-                && (!(stack.getItem() instanceof MaterialListTabletItem) || MaterialListTabletItem.isWritten(stack))) return;
+                && !(stack.getItem() instanceof MaterialListTabletItem)) return;
         if (slot == SLOT_TABLET_OUTPUT && !stack.isEmpty()) return;
         items.set(slot, stack);
         if (!stack.isEmpty() && stack.getCount() > 1) stack.setCount(1);

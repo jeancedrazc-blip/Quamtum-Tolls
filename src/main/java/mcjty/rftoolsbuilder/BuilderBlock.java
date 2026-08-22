@@ -21,6 +21,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
+import java.util.List;
 
 public class BuilderBlock extends HorizontalDirectionalBlock implements EntityBlock {
     public static final MapCodec<BuilderBlock> CODEC = simpleCodec(BuilderBlock::new);
@@ -80,5 +86,32 @@ public class BuilderBlock extends HorizontalDirectionalBlock implements EntityBl
             builder.dropContents();
         }
         return super.playerWillDestroy(level, pos, state, player);
+    }
+
+    @Override
+    protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+        List<ItemStack> drops = super.getDrops(state, params);
+        BlockEntity blockEntity = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
+        if (blockEntity instanceof BuilderBlockEntity builder && builder.storedEnergy() > 0) {
+            for (ItemStack drop : drops) {
+                if (!drop.is(this.asItem())) continue;
+                CompoundTag tag = new CompoundTag();
+                CustomData existing = drop.get(DataComponents.CUSTOM_DATA);
+                if (existing != null) tag = existing.copyTag();
+                tag.putInt("QTEnergy", builder.storedEnergy());
+                drop.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                break;
+            }
+        }
+        return drops;
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, net.minecraft.world.entity.LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (!level.isClientSide() && data != null && level.getBlockEntity(pos) instanceof BuilderBlockEntity builder) {
+            builder.restoreEnergy(data.copyTag().getIntOr("QTEnergy", 0));
+        }
     }
 }

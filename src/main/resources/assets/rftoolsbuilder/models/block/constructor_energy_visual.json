@@ -1,1 +1,367 @@
-{"credit":"Quantum Tools Constructor \u2014 active barrel energy overlay","texture_size":[16,16],"textures":{"white":"minecraft:block/quartz_block_side","dark":"minecraft:block/polished_deepslate","metal":"minecraft:block/iron_block","stone":"minecraft:block/smooth_stone","vent":"minecraft:block/deepslate_tiles","cyan":"rftoolsbuilder:block/constructor_cyan","particle":"minecraft:block/polished_deepslate"},"elements":[{"name":"energy_left","from":[3.45,14.8,4.7],"to":[3.78,17.2,24.2],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"energy_right","from":[12.22,14.8,4.7],"to":[12.55,17.2,24.2],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"energy_top","from":[7.15,19.78,5.2],"to":[8.85,20.15,23.6],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"energy_receiver","from":[7.1,14.55,-6.52],"to":[8.9,16.45,-6.18],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"muzzle_energy","from":[6.0,13.8,31.48],"to":[10.0,17.2,31.82],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"sensor_energy","from":[7.5,21.72,1.7],"to":[8.5,22.06,2.8],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"top_node_0","from":[7.35,20.14,7.0],"to":[8.65,20.48,8.25],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"top_node_1","from":[7.35,20.14,12.0],"to":[8.65,20.48,13.25],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"top_node_2","from":[7.35,20.14,17.0],"to":[8.65,20.48,18.25],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false},{"name":"top_node_3","from":[7.35,20.14,22.0],"to":[8.65,20.48,23.25],"faces":{"north":{"texture":"#cyan"},"east":{"texture":"#cyan"},"south":{"texture":"#cyan"},"west":{"texture":"#cyan"},"up":{"texture":"#cyan"},"down":{"texture":"#cyan"}},"shade":false}]}
+{
+  "credit": "Quantum Tools Constructor - restrained cyan energy channel",
+  "texture_size": [
+    64,
+    64
+  ],
+  "textures": {
+    "base": "rftoolsbuilder:block/constructor_base",
+    "pivot": "rftoolsbuilder:block/constructor_pivot",
+    "arm": "rftoolsbuilder:block/constructor_arm",
+    "projector": "rftoolsbuilder:block/constructor_projector",
+    "energy": "rftoolsbuilder:block/constructor_energy",
+    "particle": "rftoolsbuilder:block/constructor_base"
+  },
+  "elements": [
+    {
+      "name": "left_channel",
+      "from": [
+        3.95,
+        14.25,
+        6
+      ],
+      "to": [
+        4.3,
+        16.5,
+        23
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            0,
+            4,
+            4
+          ]
+        },
+        "east": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            0,
+            4,
+            4
+          ]
+        },
+        "south": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            0,
+            4,
+            4
+          ]
+        },
+        "west": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            0,
+            4,
+            4
+          ]
+        },
+        "up": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            0,
+            4,
+            4
+          ]
+        },
+        "down": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            0,
+            4,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "right_channel",
+      "from": [
+        11.7,
+        14.25,
+        6
+      ],
+      "to": [
+        12.05,
+        16.5,
+        23
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "texture": "#energy",
+          "uv": [
+            4,
+            0,
+            8,
+            4
+          ]
+        },
+        "east": {
+          "texture": "#energy",
+          "uv": [
+            4,
+            0,
+            8,
+            4
+          ]
+        },
+        "south": {
+          "texture": "#energy",
+          "uv": [
+            4,
+            0,
+            8,
+            4
+          ]
+        },
+        "west": {
+          "texture": "#energy",
+          "uv": [
+            4,
+            0,
+            8,
+            4
+          ]
+        },
+        "up": {
+          "texture": "#energy",
+          "uv": [
+            4,
+            0,
+            8,
+            4
+          ]
+        },
+        "down": {
+          "texture": "#energy",
+          "uv": [
+            4,
+            0,
+            8,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "top_channel",
+      "from": [
+        6.25,
+        18.95,
+        7
+      ],
+      "to": [
+        9.75,
+        19.3,
+        23.5
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "texture": "#energy",
+          "uv": [
+            8,
+            0,
+            12,
+            4
+          ]
+        },
+        "east": {
+          "texture": "#energy",
+          "uv": [
+            8,
+            0,
+            12,
+            4
+          ]
+        },
+        "south": {
+          "texture": "#energy",
+          "uv": [
+            8,
+            0,
+            12,
+            4
+          ]
+        },
+        "west": {
+          "texture": "#energy",
+          "uv": [
+            8,
+            0,
+            12,
+            4
+          ]
+        },
+        "up": {
+          "texture": "#energy",
+          "uv": [
+            8,
+            0,
+            12,
+            4
+          ]
+        },
+        "down": {
+          "texture": "#energy",
+          "uv": [
+            8,
+            0,
+            12,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "rear_core",
+      "from": [
+        6.5,
+        14,
+        -6.6
+      ],
+      "to": [
+        9.5,
+        16,
+        -6.25
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "texture": "#energy",
+          "uv": [
+            12,
+            0,
+            16,
+            4
+          ]
+        },
+        "east": {
+          "texture": "#energy",
+          "uv": [
+            12,
+            0,
+            16,
+            4
+          ]
+        },
+        "south": {
+          "texture": "#energy",
+          "uv": [
+            12,
+            0,
+            16,
+            4
+          ]
+        },
+        "west": {
+          "texture": "#energy",
+          "uv": [
+            12,
+            0,
+            16,
+            4
+          ]
+        },
+        "up": {
+          "texture": "#energy",
+          "uv": [
+            12,
+            0,
+            16,
+            4
+          ]
+        },
+        "down": {
+          "texture": "#energy",
+          "uv": [
+            12,
+            0,
+            16,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "projector_core",
+      "from": [
+        5.75,
+        13.65,
+        31.35
+      ],
+      "to": [
+        10.25,
+        17.1,
+        31.7
+      ],
+      "shade": false,
+      "faces": {
+        "north": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            4,
+            4,
+            8
+          ]
+        },
+        "east": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            4,
+            4,
+            8
+          ]
+        },
+        "south": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            4,
+            4,
+            8
+          ]
+        },
+        "west": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            4,
+            4,
+            8
+          ]
+        },
+        "up": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            4,
+            4,
+            8
+          ]
+        },
+        "down": {
+          "texture": "#energy",
+          "uv": [
+            0,
+            4,
+            4,
+            8
+          ]
+        }
+      }
+    }
+  ]
+}

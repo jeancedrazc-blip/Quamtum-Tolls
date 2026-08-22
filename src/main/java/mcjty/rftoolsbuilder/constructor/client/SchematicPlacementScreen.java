@@ -1,96 +1,72 @@
 package mcjty.rftoolsbuilder.constructor.client;
 
+import mcjty.rftoolsbuilder.constructor.client.ui.QuantumButton;
+import mcjty.rftoolsbuilder.constructor.client.ui.QuantumUiTheme;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 
 /**
- * Compact, mouse-only placement panel. It intentionally leaves most of the
- * world visible so the hologram can be aligned while the controls are open.
+ * Compact, non-pausing schematic transform panel.
+ *
+ * The panel is always drawn as a HUD while a deployed card is held. Pressing
+ * ALT temporarily opens this screen and unlocks the cursor, making the same
+ * panel interactive without reserving a permanent key binding.
  */
 public final class SchematicPlacementScreen extends Screen {
-    private static final int PANEL_WIDTH = 236;
-    private static final int BG = 0xE60A1118;
-    private static final int PANEL = 0xE613222C;
-    private static final int BORDER = 0xFF24576A;
-    private static final int CYAN = 0xFF20D9F3;
-    private static final int TEXT = 0xFFE8F5F7;
-    private static final int MUTED = 0xFF8CA6AE;
-    private static final int GREEN = 0xFF69E6A0;
-    private static final int ORANGE = 0xFFF1A052;
-    private static final int RED = 0xFFFF6670;
-
+    private static final int PANEL_WIDTH = 350;
+    private static final int PANEL_HEIGHT = 96;
     private boolean finished;
 
     public SchematicPlacementScreen() {
-        super(Component.translatable("screen.rftoolsbuilder.schematic_placement"));
+        super(Component.literal("Schematic Transform"));
+    }
+
+    private static int left(int screenWidth) {
+        return (screenWidth - PANEL_WIDTH) / 2;
+    }
+
+    private static int top(int screenHeight) {
+        return screenHeight - PANEL_HEIGHT - 8;
     }
 
     @Override
     protected void init() {
         super.init();
+        int x = left(width);
+        int y = top(height);
 
-        int x = panelLeft() + 12;
-        int y = 102;
+        // MOVE X/Z — always one block relative to the player's current view.
+        add(x + 45, y + 34, 18, "▲", () -> SchematicPlacementHandler.nudgeView(1, 0));
+        add(x + 25, y + 52, 18, "◀", () -> SchematicPlacementHandler.nudgeView(0, -1));
+        add(x + 45, y + 52, 18, "▼", () -> SchematicPlacementHandler.nudgeView(-1, 0));
+        add(x + 65, y + 52, 18, "▶", () -> SchematicPlacementHandler.nudgeView(0, 1));
 
-        addAxisRow(x, y, 1, 0, 0);
-        addAxisRow(x, y + 25, 0, 1, 0);
-        addAxisRow(x, y + 50, 0, 0, 1);
+        // MOVE Y — one block per click.
+        add(x + 132, y + 34, 24, "▲", () -> SchematicPlacementHandler.nudge(0, 1, 0));
+        add(x + 132, y + 54, 24, "▼", () -> SchematicPlacementHandler.nudge(0, -1, 0));
 
-        int rotationY = y + 86;
-        addButton("0°", x + 20, rotationY, 43, () -> SchematicPlacementHandler.setRotation(0));
-        addButton("90°", x + 67, rotationY, 43, () -> SchematicPlacementHandler.setRotation(1));
-        addButton("180°", x + 114, rotationY, 43, () -> SchematicPlacementHandler.setRotation(2));
-        addButton("270°", x + 161, rotationY, 43, () -> SchematicPlacementHandler.setRotation(3));
+        // ROTATE — clockwise 90 degrees while preserving the schematic center.
+        add(x + 205, y + 38, 34, "↻", () -> SchematicPlacementHandler.rotate90(true));
 
-        int mirrorY = rotationY + 25;
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.mirror_none"), x + 20, mirrorY, 58,
-                () -> SchematicPlacementHandler.setMirror(0));
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.mirror_lr"), x + 82, mirrorY, 58,
-                () -> SchematicPlacementHandler.setMirror(1));
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.mirror_fb"), x + 144, mirrorY, 60,
-                () -> SchematicPlacementHandler.setMirror(2));
-
-        int placementY = mirrorY + 34;
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.target"), x, placementY, 66,
-                SchematicPlacementHandler::placeAtLook);
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.front"), x + 70, placementY, 66,
-                SchematicPlacementHandler::placeInFront);
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.center"), x + 140, placementY, 66,
-                SchematicPlacementHandler::centerOnPlayer);
-
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.reset"), x, placementY + 25, 206,
-                SchematicPlacementHandler::reset);
-
-        int bottom = Math.max(placementY + 58, height - 36);
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.clear"), x, bottom, 62, this::clear);
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.cancel"), x + 66, bottom, 66, this::cancel);
-        addButton(Component.translatable("screen.rftoolsbuilder.placement.confirm"), x + 136, bottom, 70, this::confirm);
+        addRenderableWidget(new QuantumButton(x + 8, y + 75, 50, 17,
+                Component.literal("RESET"), SchematicPlacementHandler::reset));
+        addRenderableWidget(new QuantumButton(x + 62, y + 75, 50, 17,
+                Component.literal("CLEAR"), this::clear, () -> false, QuantumUiTheme.RED));
+        addRenderableWidget(new QuantumButton(x + 238, y + 75, 50, 17,
+                Component.literal("CANCEL"), this::cancel, () -> false, QuantumUiTheme.RED));
+        addRenderableWidget(new QuantumButton(x + 292, y + 75, 50, 17,
+                Component.literal("APPLY"), this::apply, () -> false, QuantumUiTheme.GREEN));
     }
 
-    private void addAxisRow(int x, int y, int dx, int dy, int dz) {
-        addButton("-10", x + 20, y, 43, () -> SchematicPlacementHandler.nudge(-10 * dx, -10 * dy, -10 * dz));
-        addButton("-1", x + 67, y, 43, () -> SchematicPlacementHandler.nudge(-dx, -dy, -dz));
-        addButton("+1", x + 114, y, 43, () -> SchematicPlacementHandler.nudge(dx, dy, dz));
-        addButton("+10", x + 161, y, 43, () -> SchematicPlacementHandler.nudge(10 * dx, 10 * dy, 10 * dz));
+    private void add(int x, int y, int size, String label, Runnable action) {
+        addRenderableWidget(new QuantumButton(x, y, size, 17, Component.literal(label), action,
+                () -> false, QuantumUiTheme.CYAN));
     }
 
-    private void addButton(String label, int x, int y, int width, Runnable action) {
-        addButton(Component.literal(label), x, y, width, action);
-    }
-
-    private void addButton(Component label, int x, int y, int width, Runnable action) {
-        addRenderableWidget(Button.builder(label, button -> action.run()).bounds(x, y, width, 20).build());
-    }
-
-    private int panelLeft() {
-        return Math.max(8, width - PANEL_WIDTH - 8);
-    }
-
-    private void confirm() {
+    private void apply() {
         if (!SchematicPlacementHandler.confirm()) return;
         finished = true;
         closeScreen();
@@ -103,7 +79,13 @@ public final class SchematicPlacementScreen extends Screen {
     }
 
     private void cancel() {
-        if (!finished) SchematicPlacementHandler.cancel();
+        SchematicPlacementHandler.cancel();
+        finished = true;
+        closeScreen();
+    }
+
+    /** Closes cursor interaction on ALT release without discarding staged edits. */
+    public void suspendForAltRelease() {
         finished = true;
         closeScreen();
     }
@@ -115,10 +97,8 @@ public final class SchematicPlacementScreen extends Screen {
 
     @Override
     public void onClose() {
-        if (!finished) {
-            SchematicPlacementHandler.cancel();
-            finished = true;
-        }
+        if (!finished) SchematicPlacementHandler.cancel();
+        finished = true;
         super.onClose();
     }
 
@@ -129,52 +109,29 @@ public final class SchematicPlacementScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor gui, int mouseX, int mouseY, float partialTick) {
-        int left = panelLeft();
-        int right = width - 8;
-        int top = 8;
-        int bottom = height - 8;
-
-        gui.fill(left, top, right, bottom, BORDER);
-        gui.fill(left + 1, top + 1, right - 1, bottom - 1, BG);
-        gui.fill(left + 5, top + 30, right - 5, top + 92, PANEL);
-
-        gui.text(font, Component.translatable("screen.rftoolsbuilder.schematic_placement"), left + 12, top + 10, CYAN, false);
-
-        BlockPos anchor = SchematicPlacementHandler.anchor();
-        gui.text(font, Component.literal("X " + anchor.getX() + "   Y " + anchor.getY() + "   Z " + anchor.getZ()),
-                left + 12, top + 39, TEXT, false);
-
-        gui.text(font, Component.translatable("screen.rftoolsbuilder.placement.size",
-                        SchematicPlacementHandler.sizeX(),
-                        SchematicPlacementHandler.sizeY(),
-                        SchematicPlacementHandler.sizeZ()),
-                left + 12, top + 54, MUTED, false);
-
-        gui.text(font, Component.translatable("screen.rftoolsbuilder.placement.rotation",
-                        SchematicPlacementHandler.rotationDegrees()),
-                left + 12, top + 68, MUTED, false);
-        gui.text(font, Component.translatable("screen.rftoolsbuilder.placement.mirror",
-                        SchematicPlacementHandler.mirrorName()),
-                left + 110, top + 68, MUTED, false);
-
-        int previewColor = SchematicPlacementHandler.previewReady() ? GREEN : ORANGE;
-        Component preview = SchematicPlacementHandler.previewReady()
-                ? Component.translatable("screen.rftoolsbuilder.placement.preview_ready",
-                        SchematicPlacementHandler.previewBlockCount())
-                : Component.translatable("screen.rftoolsbuilder.placement.preview_loading");
-        gui.text(font, preview, left + 12, top + 82, previewColor, false);
-
-        gui.text(font, Component.literal("X"), left + 15, 108, CYAN, false);
-        gui.text(font, Component.literal("Y"), left + 15, 133, CYAN, false);
-        gui.text(font, Component.literal("Z"), left + 15, 158, CYAN, false);
-
-        gui.text(font, Component.translatable("screen.rftoolsbuilder.placement.rotation_label"), left + 12, 184, MUTED, false);
-        gui.text(font, Component.translatable("screen.rftoolsbuilder.placement.mirror_label"), left + 12, 209, MUTED, false);
-
-        if (!SchematicPlacementHandler.hasValidCard()) {
-            gui.text(font, Component.translatable("screen.rftoolsbuilder.placement.card_missing"), left + 12, bottom - 50, RED, false);
-        }
-
+        drawCompactPanel(gui, font, width, height, true);
         super.extractRenderState(gui, mouseX, mouseY, partialTick);
+    }
+
+    public static void drawCompactPanel(GuiGraphicsExtractor gui, Font font,
+                                        int screenWidth, int screenHeight, boolean interactive) {
+        int x = left(screenWidth);
+        int y = top(screenHeight);
+        QuantumUiTheme.window(gui, x, y, PANEL_WIDTH, PANEL_HEIGHT);
+        QuantumUiTheme.title(gui, font, Component.literal("SCHEMATIC TRANSFORM"), x + PANEL_WIDTH / 2, y + 6);
+
+        gui.text(font, Component.literal("MOVE X/Z"), x + 24, y + 23, QuantumUiTheme.MUTED, false);
+        gui.text(font, Component.literal("MOVE Y"), x + 124, y + 23, QuantumUiTheme.MUTED, false);
+        gui.text(font, Component.literal("ROTATE"), x + 197, y + 23, QuantumUiTheme.MUTED, false);
+
+        int statusColor = interactive ? QuantumUiTheme.GREEN : QuantumUiTheme.AMBER;
+        gui.text(font, Component.literal(interactive ? "ALT ACTIVE" : "HOLD ALT TO EDIT"),
+                x + 257, y + 25, statusColor, false);
+        gui.text(font, Component.literal("X " + SchematicPlacementHandler.anchor().getX()
+                        + "  Y " + SchematicPlacementHandler.anchor().getY()
+                        + "  Z " + SchematicPlacementHandler.anchor().getZ()),
+                x + 257, y + 42, QuantumUiTheme.TEXT_SOFT, false);
+        gui.text(font, Component.literal("ROT " + SchematicPlacementHandler.rotationDegrees() + "°"),
+                x + 257, y + 56, QuantumUiTheme.CYAN, false);
     }
 }

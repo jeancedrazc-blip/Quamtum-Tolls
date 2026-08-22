@@ -3,10 +3,13 @@ name: Quantum Tools source build
 on:
   push:
     branches:
-      - "source/3.0.6-dev.9-placement-editor-v5sync"
+      - "main"
+      - "source/**"
+      - "feature/**"
   pull_request:
     branches:
       - "main"
+      - "source/**"
   workflow_dispatch:
 
 permissions:
@@ -23,12 +26,12 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.2.1'
+          gradle-version: "9.2.1"
 
       - name: Compile Quantum Tools
         run: gradle build --stacktrace
@@ -36,6 +39,6 @@ jobs:
       - name: Upload compiled JAR
         uses: actions/upload-artifact@v4
         with:
-          name: quantum-tools-3.0.6-dev.9
+          name: quantum-tools-${{ github.run_number }}-${{ github.sha }}
           path: build/libs/*.jar
           if-no-files-found: error

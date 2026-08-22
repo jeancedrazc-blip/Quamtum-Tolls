@@ -18,7 +18,8 @@ import java.util.function.Consumer;
 
 /** A portable reference to a validated server schematic plus its world deployment transform. */
 public final class SchematicCardItem extends Item {
-    public static final int MAX_REPLACEMENTS = 8;
+    /** Effectively unbounded for real schematics while still guarding malformed NBT. */
+    public static final int MAX_REPLACEMENTS = 4096;
     public static final int SCHEMA_VERSION = 2;
     private static final String P = "QTSchematic";
 
@@ -128,6 +129,22 @@ public final class SchematicCardItem extends Item {
         return Math.max(0, Math.min(MAX_REPLACEMENTS, root(stack).getIntOr(P + "ReplacementCount", 0)));
     }
 
+    /**
+     * Stable signature for preview content. Placement fields are deliberately
+     * excluded so moving a card never forces the schematic file to be parsed
+     * again or makes the hologram flicker while the server confirms an anchor.
+     */
+    public static int replacementSignature(ItemStack stack) {
+        CompoundTag tag = root(stack);
+        int count = Math.max(0, Math.min(MAX_REPLACEMENTS, tag.getIntOr(P + "ReplacementCount", 0)));
+        int hash = count;
+        for (int i = 0; i < count; i++) {
+            hash = 31 * hash + tag.getString(P + "ReplacementFrom" + i).orElse("").hashCode();
+            hash = 31 * hash + tag.getString(P + "ReplacementTo" + i).orElse("").hashCode();
+        }
+        return hash;
+    }
+
     public static boolean addReplacement(ItemStack stack, Block from, Block to) {
         Identifier fromId = BuiltInRegistries.BLOCK.getKey(from);
         Identifier toId = BuiltInRegistries.BLOCK.getKey(to);
@@ -150,6 +167,44 @@ public final class SchematicCardItem extends Item {
         tag.putInt(P + "ReplacementCount", count + 1);
         saveRoot(stack, tag);
         return true;
+    }
+
+    public static boolean removeReplacement(ItemStack stack, Block from) {
+        Identifier fromId = BuiltInRegistries.BLOCK.getKey(from);
+        if (fromId == null) return false;
+        CompoundTag tag = root(stack);
+        int count = Math.max(0, Math.min(MAX_REPLACEMENTS, tag.getIntOr(P + "ReplacementCount", 0)));
+        for (int i = 0; i < count; i++) {
+            if (!fromId.toString().equals(tag.getString(P + "ReplacementFrom" + i).orElse(""))) continue;
+            for (int move = i; move < count - 1; move++) {
+                tag.putString(P + "ReplacementFrom" + move,
+                        tag.getString(P + "ReplacementFrom" + (move + 1)).orElse(""));
+                tag.putString(P + "ReplacementTo" + move,
+                        tag.getString(P + "ReplacementTo" + (move + 1)).orElse(""));
+            }
+            tag.remove(P + "ReplacementFrom" + (count - 1));
+            tag.remove(P + "ReplacementTo" + (count - 1));
+            tag.putInt(P + "ReplacementCount", count - 1);
+            saveRoot(stack, tag);
+            return true;
+        }
+        return false;
+    }
+
+    public static Block replacementFor(ItemStack stack, Block source) {
+        Identifier sourceId = BuiltInRegistries.BLOCK.getKey(source);
+        CompoundTag tag = root(stack);
+        int count = Math.max(0, Math.min(MAX_REPLACEMENTS, tag.getIntOr(P + "ReplacementCount", 0)));
+        for (int i = 0; i < count; i++) {
+            if (!sourceId.toString().equals(tag.getString(P + "ReplacementFrom" + i).orElse(""))) continue;
+            String target = tag.getString(P + "ReplacementTo" + i).orElse("");
+            try {
+                return BuiltInRegistries.BLOCK.getValue(Identifier.parse(target));
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     public static void clearReplacements(ItemStack stack) {
@@ -190,6 +245,9 @@ public final class SchematicCardItem extends Item {
         text.accept(Component.literal("Format: " + (format == null ? sourceType(stack) : format.label())));
         if (hasBounds(stack)) text.accept(Component.literal("Size: " + sizeX(stack) + " × " + sizeY(stack) + " × " + sizeZ(stack)));
         text.accept(Component.literal(deployed(stack) ? "Positioned at " + anchor(stack).toShortString() : "Not positioned — deploy in world first"));
+        text.accept(Component.literal(deployed(stack)
+                ? "Sneak + right-click to edit placement"
+                : "Right-click a block to deploy the live preview"));
         int replacements = replacementCount(stack);
         if (replacements > 0) text.accept(Component.literal("Replacements: " + replacements));
     }

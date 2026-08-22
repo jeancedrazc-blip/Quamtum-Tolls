@@ -58,6 +58,21 @@ public final class ConstructorBootstrap {
             Block::new,
             props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
     );
+    public static final DeferredBlock<Block> CONSTRUCTOR_BEAM_VISUAL = BLOCKS.registerBlock(
+            "constructor_beam_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 15)
+    );
+    public static final DeferredBlock<Block> CONSTRUCTOR_RING_VISUAL = BLOCKS.registerBlock(
+            "constructor_ring_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 15)
+    );
+    public static final DeferredBlock<Block> CONSTRUCTOR_TARGET_FRAME_VISUAL = BLOCKS.registerBlock(
+            "constructor_target_frame_visual",
+            Block::new,
+            props -> props.noCollision().noOcclusion().strength(-1.0f, 3_600_000.0f).lightLevel(state -> 12)
+    );
 
     public static final DeferredBlock<SchematicTableBlock> SCHEMATIC_TABLE = BLOCKS.registerBlock(
             "schematic_table",
@@ -67,7 +82,9 @@ public final class ConstructorBootstrap {
 
     public static final DeferredItem<BlockItem> CONSTRUCTOR_ITEM = ITEMS.registerSimpleBlockItem(CONSTRUCTOR);
     public static final DeferredItem<BlockItem> SCHEMATIC_TABLE_ITEM = ITEMS.registerSimpleBlockItem(SCHEMATIC_TABLE);
+    public static final DeferredItem<SchematicCreatorCardItem> SCHEMATIC_CREATOR_CARD = ITEMS.registerItem("schematic_creator_card", SchematicCreatorCardItem::new);
     public static final DeferredItem<SchematicCardItem> SCHEMATIC_CARD = ITEMS.registerItem("schematic_card", SchematicCardItem::new);
+    public static final DeferredItem<MaterialListTabletItem> MATERIAL_LIST_TABLET = ITEMS.registerItem("material_list_tablet", MaterialListTabletItem::new);
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ConstructorBlockEntity>> CONSTRUCTOR_BLOCK_ENTITY =
             BLOCK_ENTITY_TYPES.register("constructor", () -> new BlockEntityType<>(ConstructorBlockEntity::new, false, CONSTRUCTOR.get()));
@@ -106,7 +123,9 @@ public final class ConstructorBootstrap {
         if (event.getTabKey().equals(MAIN_TAB)) {
             event.accept(CONSTRUCTOR_ITEM.get());
             event.accept(SCHEMATIC_TABLE_ITEM.get());
+            event.accept(SCHEMATIC_CREATOR_CARD.get());
             event.accept(SCHEMATIC_CARD.get());
+            event.accept(MATERIAL_LIST_TABLET.get());
         }
     }
 }

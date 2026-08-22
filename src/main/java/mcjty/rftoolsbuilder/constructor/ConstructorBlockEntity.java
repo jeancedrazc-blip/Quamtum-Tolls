@@ -20,6 +20,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
@@ -36,24 +37,27 @@ import java.io.IOException;
 public final class ConstructorBlockEntity extends net.minecraft.world.level.block.entity.BlockEntity implements MenuProvider, Container {
     public static final int ENERGY_CAPACITY = 5_000_000;
     public static final int MAX_RECEIVE = 250_000;
-    public static final int BASE_PLACEMENT_COST = 1_000;
-    public static final int DISTANCE_COST = 15;
-    public static final int BLOCK_ENTITY_SURCHARGE = 1_500;
-    public static final int ENTITY_SURCHARGE = 750;
+    public static final int ENERGY_BLOCK_INTERVAL = 500;
     public static final int AIM_TICKS = 4;
     public static final int CHARGE_TICKS = 5;
     public static final int MIN_FLIGHT_TICKS = 10;
+    public static final int MIN_SCALED_FLIGHT_TICKS = 3;
     public static final int SHOT_COOLDOWN_TICKS = 4;
+    public static final int TABLET_SCAN_TICKS = 24;
     public static final int MAX_TARGET_DISTANCE = 256;
     public static final int SLOT_SCHEMATIC = 0;
+    public static final int SLOT_TABLET_INPUT = 1;
+    public static final int SLOT_TABLET_OUTPUT = 2;
 
     private final ConstructorEnergyStorage energy = new ConstructorEnergyStorage(ENERGY_CAPACITY, MAX_RECEIVE);
-    private final NonNullList<ItemStack> items = NonNullList.withSize(1, ItemStack.EMPTY);
+    private final NonNullList<ItemStack> items = NonNullList.withSize(3, ItemStack.EMPTY);
 
     private ConstructorStatus status = ConstructorStatus.IDLE;
     private ConstructorReplaceMode replaceMode = ConstructorReplaceMode.REPLACE_ANY;
+    private ConstructorSpeed speed = ConstructorSpeed.NORMAL;
     private boolean skipMissing;
     private boolean replaceBlockEntities;
+    private int energyBlockProgress;
 
     private BlockPos targetPos;
     private BlockState targetState;
@@ -62,6 +66,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     private int shotProgress;
     private int flightTicks = MIN_FLIGHT_TICKS;
     private int shotCooldown;
+    private int tabletScanProgress;
     private boolean running;
     private boolean shotReserved;
     private boolean pauseAfterShot;
@@ -89,11 +94,18 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 case 11 -> replaceBlockEntities ? 1 : 0;
                 case 12 -> flightTicks;
                 case 13 -> targetIsEntity ? 1 : 0;
+                case 14 -> energy.getEnergyStored() & 0xFFFF;
+                case 15 -> energy.getEnergyStored() >>> 16;
+                case 16 -> energy.getMaxEnergyStored() & 0xFFFF;
+                case 17 -> energy.getMaxEnergyStored() >>> 16;
+                case 18 -> tabletScanProgress;
+                case 19 -> speed.ordinal();
+                case 20 -> energyBlockProgress;
                 default -> 0;
             };
         }
         @Override public void set(int index, int value) {}
-        @Override public int getCount() { return 14; }
+        @Override public int getCount() { return 21; }
     };
 
     public ConstructorBlockEntity(BlockPos pos, BlockState state) {
@@ -101,8 +113,18 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     public ConstructorEnergyStorage energyStorage() { return energy; }
+    public int storedEnergy() { return energy.getEnergyStored(); }
+    public void restoreEnergy(int amount) { energy.setStored(amount); setChangedAndSync(); }
+    public void restorePortableState(int amount, int speedOrdinal, int blockProgress) {
+        energy.setStored(amount);
+        speed = ConstructorSpeed.byOrdinal(speedOrdinal);
+        energyBlockProgress = Math.floorMod(blockProgress, ENERGY_BLOCK_INTERVAL);
+        setChangedAndSync();
+    }
     public ConstructorStatus status() { return status; }
     public ConstructorReplaceMode replaceMode() { return replaceMode; }
+    public ConstructorSpeed speed() { return speed; }
+    public int energyBlockProgress() { return energyBlockProgress; }
     public boolean skipMissing() { return skipMissing; }
     public boolean replaceBlockEntities() { return replaceBlockEntities; }
     public BlockPos targetPos() { return targetPos; }
@@ -112,12 +134,14 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         return !reservedPlacementStack.isEmpty() ? reservedPlacementStack : entityVisualStack;
     }
     public int shotProgress() { return shotProgress; }
-    public int flightTicks() { return Math.max(MIN_FLIGHT_TICKS, flightTicks); }
+    public int flightTicks() { return Math.max(MIN_SCALED_FLIGHT_TICKS, flightTicks); }
     public boolean shotReserved() { return shotReserved; }
     public boolean isRunning() { return running; }
     public ItemStack missingItem() { return missingItem; }
     public ContainerData menuData() { return menuData; }
     public ItemStack schematicCard() { return items.get(SLOT_SCHEMATIC); }
+    public ItemStack tabletInput() { return items.get(SLOT_TABLET_INPUT); }
+    public ItemStack tabletOutput() { return items.get(SLOT_TABLET_OUTPUT); }
     public int jobIndex() { return activeJob == null ? 0 : activeJob.completed(); }
     public int jobTotal() { return activeJob == null ? (targetPos == null ? 0 : 1) : activeJob.total(); }
     public float jobProgress() { return activeJob == null ? (status == ConstructorStatus.COMPLETE ? 1f : 0f) : activeJob.progress(); }
@@ -331,8 +355,158 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             case 3 -> { replaceMode = replaceMode.next(); setChangedAndSync(); yield true; }
             case 4 -> { skipMissing = !skipMissing; setChangedAndSync(); yield true; }
             case 5 -> { replaceBlockEntities = !replaceBlockEntities; setChangedAndSync(); yield true; }
+            case 6 -> writeMaterialTablet();
+            case 7 -> {
+                if (running || shotReserved || !(schematicCard().getItem() instanceof SchematicCardItem)) yield false;
+                SchematicCardItem.clearReplacements(schematicCard());
+                refreshMaterialTablet();
+                setChangedAndSync();
+                yield true;
+            }
+            case 13 -> { speed = speed.next(); setChangedAndSync(); yield true; }
             default -> false;
         };
+    }
+
+    private boolean writeMaterialTablet() {
+        if (!(tabletInput().getItem() instanceof MaterialListTabletItem)
+                || !tabletOutput().isEmpty()
+                || !SchematicCardItem.hasSource(schematicCard())) return false;
+        try {
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
+            java.util.Map<String, Integer> counts = materialCounts(plan);
+            net.minecraft.nbt.CompoundTag tag = new net.minecraft.nbt.CompoundTag();
+            tag.putString("QTSchematicName", SchematicCardItem.sourceName(schematicCard()));
+            tag.putInt("QTMaterialKinds", counts.size());
+            tag.putInt("QTMaterialTotal", plan.blockCount());
+            tag.putString("QTMaterials", encodeMaterials(counts));
+            tag.putString("QTConstructorDimension", level.dimension().identifier().toString());
+            tag.putLong("QTConstructorPos", worldPosition.asLong());
+            ItemStack written = tabletInput().copyWithCount(1);
+            written.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            items.set(SLOT_TABLET_INPUT, ItemStack.EMPTY);
+            items.set(SLOT_TABLET_OUTPUT, written);
+            setChangedAndSync();
+            return true;
+        } catch (IOException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    void refreshMaterialTablet() {
+        ItemStack tablet = !tabletOutput().isEmpty() ? tabletOutput() : tabletInput();
+        refreshMaterialTablet(tablet);
+    }
+
+    public void refreshMaterialTablet(ItemStack tablet) {
+        if (!(tablet.getItem() instanceof MaterialListTabletItem) || !MaterialListTabletItem.isWritten(tablet)
+                || !SchematicCardItem.hasSource(schematicCard())) return;
+        try {
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
+            java.util.Map<String, Integer> counts = materialCounts(plan);
+            net.minecraft.nbt.CompoundTag tag = tablet.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA).copyTag();
+            tag.putInt("QTMaterialKinds", counts.size());
+            tag.putInt("QTMaterialTotal", plan.blockCount());
+            tag.putString("QTMaterials", encodeMaterials(counts));
+            tag.putString("QTConstructorDimension", level.dimension().identifier().toString());
+            tag.putLong("QTConstructorPos", worldPosition.asLong());
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+        } catch (IOException | RuntimeException ignored) {
+        }
+    }
+
+    /** Refreshes only owned quantities; the schematic card no longer needs to remain inserted. */
+    public boolean refreshTabletAvailability(ItemStack tablet) {
+        if (!(tablet.getItem() instanceof MaterialListTabletItem) || !MaterialListTabletItem.isWritten(tablet)
+                || !(level instanceof ServerLevel server)) return false;
+        var data = tablet.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        if (data == null) return false;
+        CompoundTag tag = data.copyTag();
+        String current = tag.getString("QTMaterials").orElse("");
+        StringBuilder refreshed = new StringBuilder(current.length() + 32);
+        try {
+            for (String token : current.split(";")) {
+                if (token.isBlank()) continue;
+                String[] fields = token.split("=");
+                if (fields.length < 2) continue;
+                var id = net.minecraft.resources.Identifier.parse(fields[0]);
+                int required = Integer.parseInt(fields[1]);
+                Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
+                int available = block == null ? 0
+                        : ConstructorMaterialAccess.countAvailable(server, worldPosition, block.asItem());
+                refreshed.append(fields[0]).append('=').append(required).append('=').append(available).append(';');
+            }
+            tag.putString("QTMaterials", refreshed.toString());
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    /** Makes a linked tablet a live monitor of this Constructor's current schematic. */
+    public String refreshTabletFromCurrentSchematic(ItemStack tablet) {
+        if (!(tablet.getItem() instanceof MaterialListTabletItem) || !(level instanceof ServerLevel)) return "READ ERROR";
+        var existing = tablet.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        CompoundTag tag = existing == null ? new CompoundTag() : existing.copyTag();
+        tag.putString("QTConstructorDimension", level.dimension().identifier().toString());
+        tag.putLong("QTConstructorPos", worldPosition.asLong());
+        if (!SchematicCardItem.hasSource(schematicCard())) {
+            tag.putString("QTSchematicName", "NO SCHEMATIC");
+            tag.putInt("QTMaterialKinds", 0);
+            tag.putInt("QTMaterialTotal", 0);
+            tag.putString("QTMaterials", "");
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            return "NO SCHEMATIC";
+        }
+        try {
+            ConstructionPlan plan = UniversalSchematicLoader.loadCard(schematicCard(), false);
+            java.util.Map<String, Integer> counts = materialCounts(plan);
+            tag.putString("QTSchematicName", SchematicCardItem.sourceName(schematicCard()));
+            tag.putInt("QTMaterialKinds", counts.size());
+            tag.putInt("QTMaterialTotal", plan.blockCount());
+            tag.putString("QTMaterials", encodeMaterials(counts));
+            tablet.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+            return status == ConstructorStatus.COMPLETE ? "COMPLETE"
+                    : status == ConstructorStatus.PAUSED ? "PAUSED" : "LIVE";
+        } catch (IOException | RuntimeException ignored) {
+            return "READ ERROR";
+        }
+    }
+
+    private java.util.Map<String, Integer> materialCounts(ConstructionPlan plan) {
+        java.util.Map<String, Integer> counts = new java.util.TreeMap<>();
+        for (var entry : plan.entries()) {
+            Block source = entry.sourceState().getBlock();
+            Block replacement = SchematicCardItem.replacementFor(schematicCard(), source);
+            Block effective = replacement == null ? source : replacement;
+            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(effective).toString();
+            counts.merge(id, 1, Integer::sum);
+        }
+        return counts;
+    }
+
+    private String encodeMaterials(java.util.Map<String, Integer> counts) {
+        StringBuilder encoded = new StringBuilder();
+        for (var entry : counts.entrySet()) {
+            int available = 0;
+            try {
+                var id = net.minecraft.resources.Identifier.parse(entry.getKey());
+                Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getValue(id);
+                if (level instanceof ServerLevel server && block != null) {
+                    available = ConstructorMaterialAccess.countAvailable(server, worldPosition, block.asItem());
+                }
+            } catch (RuntimeException ignored) {
+            }
+            encoded.append(entry.getKey()).append('=').append(entry.getValue())
+                    .append('=').append(available).append(';');
+        }
+        return encoded.toString();
     }
 
     public static void tick(Level level, BlockPos pos, BlockState blockState, ConstructorBlockEntity be) {
@@ -341,6 +515,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private void serverTick(ServerLevel level) {
+        tickMaterialTabletWriter();
         if (activeJob == null && pendingJobData != null) restorePendingJob();
         if (!running || targetPos == null || (!targetIsEntity && targetState == null)) return;
         if (shotCooldown > 0 && !shotReserved) { shotCooldown--; return; }
@@ -365,13 +540,13 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 transition(ConstructorStatus.AIMING);
             }
             case AIMING -> {
-                if (++phaseTick >= AIM_TICKS) {
+                if (++phaseTick >= scaledTicks(AIM_TICKS)) {
                     phaseTick = 0;
                     transition(ConstructorStatus.CHARGING);
                 }
             }
             case CHARGING -> {
-                if (++phaseTick >= CHARGE_TICKS) {
+                if (++phaseTick >= scaledTicks(CHARGE_TICKS)) {
                     if (!reserveShot(level)) return;
                     phaseTick = 0;
                     shotProgress = 0;
@@ -379,6 +554,26 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
                 }
             }
             default -> { }
+        }
+    }
+
+    private void tickMaterialTabletWriter() {
+        boolean ready = tabletInput().getItem() instanceof MaterialListTabletItem
+                && tabletOutput().isEmpty()
+                && SchematicCardItem.hasSource(schematicCard());
+        if (!ready) {
+            if (tabletScanProgress != 0) {
+                tabletScanProgress = 0;
+                setChangedAndSync();
+            }
+            return;
+        }
+        tabletScanProgress++;
+        if (tabletScanProgress >= TABLET_SCAN_TICKS) {
+            tabletScanProgress = 0;
+            writeMaterialTablet();
+        } else if ((tabletScanProgress & 3) == 0) {
+            syncClientState();
         }
     }
 
@@ -497,7 +692,6 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             if (skipMissing) skipCurrentAndAdvance(); else transition(ConstructorStatus.WAITING_MATERIAL);
             return false;
         }
-        energy.consume(cost);
         reservedPlacementStack = material.placementStack();
         missingItem = ItemStack.EMPTY;
         shotReserved = true;
@@ -513,6 +707,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
             shotReserved = false;
             reservedPlacementStack = ItemStack.EMPTY;
             if (!spawned) { failJob(ConstructorStatus.ERROR); return; }
+            consumeCompletedPlacementEnergy();
             finishCurrentAndAdvance(flightTicks());
             return;
         }
@@ -528,6 +723,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
         if (!placed) { failJob(ConstructorStatus.ERROR); return; }
+        consumeCompletedPlacementEnergy();
         finishCurrentAndAdvance(flightTicks());
     }
 
@@ -552,7 +748,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     private void finishCurrentAndAdvance(int finishedShotProgress) {
         shotReserved = false;
         reservedPlacementStack = ItemStack.EMPTY;
-        shotCooldown = SHOT_COOLDOWN_TICKS;
+        shotCooldown = scaledCooldown();
         if (activeJob != null) {
             boolean more = targetIsEntity ? activeJob.advanceEntity() : activeJob.advanceBlock();
             if (more) {
@@ -593,16 +789,29 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     }
 
     private int energyCost(BlockPos target, boolean entity, boolean blockEntity) {
-        double distance = Math.sqrt(worldPosition.distSqr(target));
-        int cost = BASE_PLACEMENT_COST + (int) Math.ceil(distance * DISTANCE_COST);
-        if (blockEntity) cost += BLOCK_ENTITY_SURCHARGE;
-        if (entity) cost += ENTITY_SURCHARGE;
-        return cost;
+        return energyBlockProgress >= ENERGY_BLOCK_INTERVAL - 1 ? 1 : 0;
     }
 
     private int ticksForDistance(BlockPos target) {
         double distSqr = target.distSqr(worldPosition);
-        return Math.max(MIN_FLIGHT_TICKS, (int) (Math.sqrt(Math.sqrt(distSqr)) * 4.0));
+        int normal = Math.max(MIN_FLIGHT_TICKS, (int) (Math.sqrt(Math.sqrt(distSqr)) * 4.0));
+        return Math.max(MIN_SCALED_FLIGHT_TICKS, (normal + speed.multiplier() - 1) / speed.multiplier());
+    }
+
+    private int scaledTicks(int normalTicks) {
+        return Math.max(1, (normalTicks + speed.multiplier() - 1) / speed.multiplier());
+    }
+
+    private int scaledCooldown() {
+        return Math.max(0, SHOT_COOLDOWN_TICKS / speed.multiplier());
+    }
+
+    private void consumeCompletedPlacementEnergy() {
+        energyBlockProgress++;
+        if (energyBlockProgress >= ENERGY_BLOCK_INTERVAL) {
+            energyBlockProgress = 0;
+            energy.consume(1);
+        }
     }
 
     private void transition(ConstructorStatus next) {
@@ -613,7 +822,7 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         }
     }
 
-    private void setChangedAndSync() { setChanged(); syncClientState(); }
+    void setChangedAndSync() { setChanged(); syncClientState(); }
     private void syncClientState() {
         if (level instanceof ServerLevel server) server.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), 3);
     }
@@ -629,6 +838,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         output.putInt("Energy", energy.getEnergyStored());
         output.putInt("Status", status.ordinal());
         output.putInt("ReplaceMode", replaceMode.ordinal());
+        output.putInt("Speed", speed.ordinal());
+        output.putInt("EnergyBlockProgress", energyBlockProgress);
         output.putBoolean("SkipMissing", skipMissing);
         output.putBoolean("ReplaceBlockEntities", replaceBlockEntities);
         output.putBoolean("Running", running);
@@ -642,6 +853,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         if (targetPos != null) output.putLong("TargetPos", targetPos.asLong());
         if (targetState != null) output.store("TargetState", BlockState.CODEC, targetState);
         if (!schematicCard().isEmpty()) output.store("SchematicCard", ItemStack.CODEC, schematicCard());
+        if (!tabletInput().isEmpty()) output.store("TabletInput", ItemStack.CODEC, tabletInput());
+        if (!tabletOutput().isEmpty()) output.store("TabletOutput", ItemStack.CODEC, tabletOutput());
         if (!reservedPlacementStack.isEmpty()) output.store("ReservedPlacementStack", ItemStack.CODEC, reservedPlacementStack);
         if (!entityVisualStack.isEmpty()) output.store("EntityVisualStack", ItemStack.CODEC, entityVisualStack);
         if (!missingItem.isEmpty()) output.store("MissingItem", ItemStack.CODEC, missingItem);
@@ -657,6 +870,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         status = ConstructorStatus.values()[Math.max(0, Math.min(ConstructorStatus.values().length - 1, s))];
         int mode = input.getIntOr("ReplaceMode", ConstructorReplaceMode.REPLACE_ANY.ordinal());
         replaceMode = ConstructorReplaceMode.values()[Math.max(0, Math.min(ConstructorReplaceMode.values().length - 1, mode))];
+        speed = ConstructorSpeed.byOrdinal(input.getIntOr("Speed", ConstructorSpeed.NORMAL.ordinal()));
+        energyBlockProgress = Math.floorMod(input.getIntOr("EnergyBlockProgress", 0), ENERGY_BLOCK_INTERVAL);
         skipMissing = input.getBooleanOr("SkipMissing", false);
         replaceBlockEntities = input.getBooleanOr("ReplaceBlockEntities", false);
         running = input.getBooleanOr("Running", false);
@@ -665,12 +880,14 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         targetIsEntity = input.getBooleanOr("TargetIsEntity", false);
         phaseTick = Math.max(0, input.getIntOr("PhaseTick", 0));
         shotProgress = Math.max(0, input.getIntOr("ShotProgress", 0));
-        flightTicks = Math.max(MIN_FLIGHT_TICKS, input.getIntOr("FlightTicks", MIN_FLIGHT_TICKS));
+        flightTicks = Math.max(MIN_SCALED_FLIGHT_TICKS, input.getIntOr("FlightTicks", MIN_FLIGHT_TICKS));
         shotCooldown = Math.max(0, input.getIntOr("ShotCooldown", 0));
         long packed = input.getLongOr("TargetPos", Long.MIN_VALUE);
         targetPos = packed == Long.MIN_VALUE ? null : BlockPos.of(packed);
         targetState = input.read("TargetState", BlockState.CODEC).orElse(null);
         items.set(SLOT_SCHEMATIC, input.read("SchematicCard", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+        items.set(SLOT_TABLET_INPUT, input.read("TabletInput", ItemStack.CODEC).orElse(ItemStack.EMPTY));
+        items.set(SLOT_TABLET_OUTPUT, input.read("TabletOutput", ItemStack.CODEC).orElse(ItemStack.EMPTY));
         reservedPlacementStack = input.read("ReservedPlacementStack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         entityVisualStack = input.read("EntityVisualStack", ItemStack.CODEC).orElse(ItemStack.EMPTY);
         missingItem = input.read("MissingItem", ItemStack.CODEC).orElse(ItemStack.EMPTY);
@@ -692,40 +909,47 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
         }
     }
 
-    @Override public int getContainerSize() { return 1; }
-    @Override public boolean isEmpty() { return schematicCard().isEmpty(); }
-    @Override public ItemStack getItem(int slot) { return slot == SLOT_SCHEMATIC ? schematicCard() : ItemStack.EMPTY; }
+    @Override public int getContainerSize() { return items.size(); }
+    @Override public boolean isEmpty() { return items.stream().allMatch(ItemStack::isEmpty); }
+    @Override public ItemStack getItem(int slot) {
+        return slot >= 0 && slot < items.size() ? items.get(slot) : ItemStack.EMPTY;
+    }
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
-        if (slot != SLOT_SCHEMATIC || !canRemoveCard()) return ItemStack.EMPTY;
-        ItemStack stack = schematicCard();
+        if (slot < 0 || slot >= items.size() || (slot == SLOT_SCHEMATIC && !canRemoveCard())) return ItemStack.EMPTY;
+        ItemStack stack = items.get(slot);
         if (stack.isEmpty()) return ItemStack.EMPTY;
         ItemStack result = stack.split(amount);
-        if (stack.isEmpty()) {
-            items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
-            clearJob();
-        } else setChangedAndSync();
+        if (stack.isEmpty()) items.set(slot, ItemStack.EMPTY);
+        if (slot == SLOT_SCHEMATIC && items.get(slot).isEmpty()) clearJob(); else setChangedAndSync();
         return result;
     }
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
-        if (slot != SLOT_SCHEMATIC || !canRemoveCard()) return ItemStack.EMPTY;
-        ItemStack result = schematicCard();
-        items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
-        activeJob = null;
-        pendingJobData = null;
-        preparedEntity = null;
+        if (slot < 0 || slot >= items.size() || (slot == SLOT_SCHEMATIC && !canRemoveCard())) return ItemStack.EMPTY;
+        ItemStack result = items.get(slot);
+        items.set(slot, ItemStack.EMPTY);
+        if (slot == SLOT_SCHEMATIC) {
+            activeJob = null;
+            pendingJobData = null;
+            preparedEntity = null;
+        }
         return result;
     }
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        if (slot != SLOT_SCHEMATIC || (!canRemoveCard() && !ItemStack.matches(schematicCard(), stack))) return;
-        items.set(SLOT_SCHEMATIC, stack);
+        if (slot < 0 || slot >= items.size()) return;
+        if (slot == SLOT_SCHEMATIC && (!canRemoveCard() && !ItemStack.matches(schematicCard(), stack))) return;
+        if (slot == SLOT_TABLET_INPUT && !stack.isEmpty()
+                && !(stack.getItem() instanceof MaterialListTabletItem)) return;
+        if (slot == SLOT_TABLET_OUTPUT && !stack.isEmpty()) return;
+        items.set(slot, stack);
         if (!stack.isEmpty() && stack.getCount() > 1) stack.setCount(1);
-        if (stack.isEmpty()) clearJob(); else setChangedAndSync();
+        if (slot == SLOT_TABLET_INPUT) tabletScanProgress = 0;
+        if (slot == SLOT_SCHEMATIC && stack.isEmpty()) clearJob(); else setChangedAndSync();
     }
 
     @Override public boolean stillValid(Player player) { return Container.stillValidBlockEntity(this, player); }
@@ -733,7 +957,8 @@ public final class ConstructorBlockEntity extends net.minecraft.world.level.bloc
     @Override
     public void clearContent() {
         if (!canRemoveCard()) return;
-        items.set(SLOT_SCHEMATIC, ItemStack.EMPTY);
+        for (int slot = 0; slot < items.size(); slot++) items.set(slot, ItemStack.EMPTY);
+        tabletScanProgress = 0;
         clearJob();
     }
 

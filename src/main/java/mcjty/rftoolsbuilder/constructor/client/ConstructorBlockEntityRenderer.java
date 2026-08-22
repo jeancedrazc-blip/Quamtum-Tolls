@@ -58,6 +58,9 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         blockResolver.update(state.turret, ConstructorBootstrap.CONSTRUCTOR_TURRET_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
         blockResolver.update(state.barrel, ConstructorBootstrap.CONSTRUCTOR_BARREL_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
         blockResolver.update(state.energyChannel, ConstructorBootstrap.CONSTRUCTOR_ENERGY_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
+        blockResolver.update(state.beam, ConstructorBootstrap.CONSTRUCTOR_BEAM_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
+        blockResolver.update(state.ring, ConstructorBootstrap.CONSTRUCTOR_RING_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
+        blockResolver.update(state.targetFrame, ConstructorBootstrap.CONSTRUCTOR_TARGET_FRAME_VISUAL.get().defaultBlockState(), DISPLAY_CONTEXT);
 
         BlockPos origin = blockEntity.getBlockPos();
         BlockPos target = blockEntity.targetPos();
@@ -77,6 +80,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
         double time = partialTick;
         if (blockEntity.getLevel() != null) time += blockEntity.getLevel().getGameTime();
+        state.effectTime = (float) time;
 
         if (!state.hasTarget && (state.status == ConstructorStatus.IDLE
                 || state.status == ConstructorStatus.COMPLETE
@@ -139,10 +143,20 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
             state.energyPulse = 1.0f;
         }
 
-        if (state.status == ConstructorStatus.FIRING && state.hasTarget) {
+        if (state.hasTarget && (state.status == ConstructorStatus.CHARGING
+                || state.status == ConstructorStatus.FIRING)) {
             state.projectileVisible = targetState != null || state.projectileIsItem;
-            state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick) / (float) blockEntity.flightTicks());
-            state.recoil = 0.145f * (1.0f - smoothStep(state.projectileProgress));
+            if (state.status == ConstructorStatus.FIRING) {
+                state.projectileProgress = clamp01((blockEntity.shotProgress() + partialTick)
+                        / (float) blockEntity.flightTicks());
+                state.recoil = 0.145f * (1.0f - smoothStep(state.projectileProgress));
+            } else {
+                // Show the locked path while the shot is charging. This is only
+                // reached after the server has validated energy, material,
+                // chunk, range and block support, so the preview cannot promise
+                // a placement that the authoritative machine already rejected.
+                state.projectileProgress = 0.0f;
+            }
         }
     }
 
@@ -151,7 +165,7 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         submitTurret(state, poseStack, collector);
         submitBarrel(state, poseStack, collector);
         submitEnergy(state, poseStack, collector);
-        if (state.projectileVisible && state.hasTarget) submitProjectile(state, poseStack, collector);
+        if (state.projectileVisible && state.hasTarget) submitConstructionEffect(state, poseStack, collector);
     }
 
     private static void submitTurret(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
@@ -184,35 +198,74 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
         poseStack.popPose();
     }
 
-    private static void submitProjectile(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
+    private static void submitConstructionEffect(ConstructorRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
         double dx = state.targetX - PIVOT_X;
         double dy = state.targetY - PIVOT_Y;
         double dz = state.targetZ - PIVOT_Z;
         double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (length < 1.0e-5) return;
 
-        double nx = dx / length;
-        double ny = dy / length;
-        double nz = dz / length;
-        double muzzleX = PIVOT_X + nx * MUZZLE_DISTANCE;
-        double muzzleY = PIVOT_Y + ny * MUZZLE_DISTANCE;
-        double muzzleZ = PIVOT_Z + nz * MUZZLE_DISTANCE;
+        double beamLength = Math.max(0.05, length - MUZZLE_DISTANCE);
+        submitBeam(state, poseStack, collector, beamLength);
+        submitTargetFrame(state, poseStack, collector);
+        if (state.status == ConstructorStatus.FIRING) {
+            submitMaterializingTarget(state, poseStack, collector);
+        }
+    }
 
-        float p = smoothStep(state.projectileProgress);
-        double x = lerp(muzzleX, state.targetX, p);
-        double y = lerp(muzzleY, state.targetY, p) + Math.sin(Math.PI * p) * 0.32;
-        double z = lerp(muzzleZ, state.targetZ, p);
+    private static void submitBeam(ConstructorRenderState state, PoseStack poseStack,
+                                   SubmitNodeCollector collector, double beamLength) {
+        poseStack.pushPose();
+        poseStack.translate(PIVOT_X, PIVOT_Y, PIVOT_Z);
+        poseStack.mulPose(Axis.YP.rotationDegrees(state.targetYaw));
+        poseStack.mulPose(Axis.XP.rotationDegrees(state.targetPitch));
+        poseStack.translate(-0.5, -0.5, MUZZLE_DISTANCE);
 
-        float materialize = clamp01(state.projectileProgress * 3.0f);
-        float scale = 0.26f + 0.12f * smoothStep(materialize);
+        float flicker = 0.88f + 0.12f * (float) Math.sin(state.effectTime * 2.7f);
+        poseStack.pushPose();
+        poseStack.translate(0.5, 0.5, 0.0);
+        poseStack.scale(flicker, flicker, (float) beamLength);
+        poseStack.translate(-0.5, -0.5, 0.0);
+        state.beam.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+        poseStack.popPose();
+
+        // Three square energy pulses travel along the beam. Their low-poly
+        // geometry keeps the effect firmly inside Minecraft's vanilla style.
+        for (int i = 0; i < 3; i++) {
+            float travel = positiveModulo(state.effectTime * 0.085f + i / 3.0f, 1.0f);
+            float ringScale = 0.56f + 0.12f * (float) Math.sin((state.effectTime + i * 4.0f) * 0.45f);
+            poseStack.pushPose();
+            poseStack.translate(0.5, 0.5, beamLength * travel);
+            poseStack.mulPose(Axis.ZP.rotationDegrees(state.effectTime * 7.0f + i * 30.0f));
+            poseStack.scale(ringScale, ringScale, ringScale);
+            poseStack.translate(-0.5, -0.5, -0.5);
+            state.ring.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+            poseStack.popPose();
+        }
+        poseStack.popPose();
+    }
+
+    private static void submitTargetFrame(ConstructorRenderState state, PoseStack poseStack,
+                                          SubmitNodeCollector collector) {
+        float pulse = 1.0f + 0.018f * (float) Math.sin(state.effectTime * 0.65f);
+        poseStack.pushPose();
+        poseStack.translate(state.targetX, state.targetY, state.targetZ);
+        poseStack.scale(pulse, pulse, pulse);
+        poseStack.translate(-0.5, -0.5, -0.5);
+        state.targetFrame.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
+        poseStack.popPose();
+    }
+
+    private static void submitMaterializingTarget(ConstructorRenderState state, PoseStack poseStack,
+                                                   SubmitNodeCollector collector) {
+        float growth = smoothStep(clamp01((state.projectileProgress - 0.10f) / 0.82f));
+        float scale = 0.06f + 0.94f * growth;
 
         poseStack.pushPose();
-        poseStack.translate(x, y, z);
-        poseStack.mulPose(Axis.YP.rotationDegrees(360.0f * p));
-        poseStack.mulPose(Axis.XP.rotationDegrees(90.0f * p));
+        poseStack.translate(state.targetX, state.targetY, state.targetZ);
 
         if (state.projectileIsItem) {
-            float itemScale = scale * 1.45f;
+            float itemScale = scale * 0.82f;
             poseStack.scale(itemScale, itemScale, itemScale);
             state.entityProjectile.submit(poseStack, collector, FULL_BRIGHT, OverlayTexture.NO_OVERLAY, 0);
         } else {
@@ -261,5 +314,8 @@ public final class ConstructorBlockEntityRenderer implements BlockEntityRenderer
 
     private static float clamp01(float value) { return Math.max(0.0f, Math.min(1.0f, value)); }
     private static float smoothStep(float value) { float t = clamp01(value); return t * t * (3.0f - 2.0f * t); }
-    private static double lerp(double a, double b, double t) { return a + (b - a) * t; }
+    private static float positiveModulo(float value, float modulus) {
+        float result = value % modulus;
+        return result < 0.0f ? result + modulus : result;
+    }
 }

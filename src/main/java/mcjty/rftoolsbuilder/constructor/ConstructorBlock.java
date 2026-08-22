@@ -21,6 +21,12 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.nbt.CompoundTag;
+import java.util.List;
 
 public final class ConstructorBlock extends HorizontalDirectionalBlock implements EntityBlock {
     public static final MapCodec<ConstructorBlock> CODEC = simpleCodec(ConstructorBlock::new);
@@ -98,5 +104,36 @@ public final class ConstructorBlock extends HorizontalDirectionalBlock implement
             Containers.dropContents(level, pos, constructor);
         }
         return super.playerWillDestroy(level, pos, state, player);
+    }
+
+    @Override
+    protected List<ItemStack> getDrops(BlockState state, LootParams.Builder params) {
+        List<ItemStack> drops = super.getDrops(state, params);
+        BlockEntity blockEntity = params.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
+        if (blockEntity instanceof ConstructorBlockEntity constructor) {
+            for (ItemStack drop : drops) {
+                if (!drop.is(this.asItem())) continue;
+                CompoundTag tag = new CompoundTag();
+                CustomData existing = drop.get(DataComponents.CUSTOM_DATA);
+                if (existing != null) tag = existing.copyTag();
+                tag.putInt("QTEnergy", constructor.storedEnergy());
+                tag.putInt("QTSpeed", constructor.speed().ordinal());
+                tag.putInt("QTEnergyBlockProgress", constructor.energyBlockProgress());
+                drop.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+                break;
+            }
+        }
+        return drops;
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, net.minecraft.world.entity.LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (!level.isClientSide() && data != null && level.getBlockEntity(pos) instanceof ConstructorBlockEntity constructor) {
+            CompoundTag tag = data.copyTag();
+            constructor.restorePortableState(tag.getIntOr("QTEnergy", 0), tag.getIntOr("QTSpeed", 0),
+                    tag.getIntOr("QTEnergyBlockProgress", 0));
+        }
     }
 }

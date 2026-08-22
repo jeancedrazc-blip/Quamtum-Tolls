@@ -1,14 +1,46 @@
 # Changelog
 
-This changelog records only verified project state. Historical deltas that cannot be proven from a canonical artifact or repository history must not be reconstructed from memory.
+This changelog records verified repository state. Runtime-dependent behavior remains marked as pending until tested in Minecraft.
 
-## 3.0.5 — current canonical baseline
+## 3.0.6-dev.11
+
+- Constructor material grid now exposes every schematic material through mouse-wheel and button scrolling instead of truncating at 21 entries.
+- Replacement and placement settings are proper modal panels with reliable close controls and blocked background slots.
+- Material List Tablet now scrolls its complete list, renders real item icons, supports working filters, and stores adjacent inventory availability.
+- Schematic cards now support up to 4096 replacement rules and refresh the open Constructor menu when their source or substitutions change.
+
+## 3.0.6-dev.10
+
+### Verified in source/build
+
+- Complete editable Builder and Quarry source reconstructed on the dev.10 integration base.
+- Quantum Tools UI kit added with shared themed components.
+- Schematic placement tools added for deploy, X/Z move, Y move, rotate, mirror and precise transform.
+- Exact X/Y/Z, rotation and mirror editor added.
+- Live hologram remains visible during placement editing.
+- Draft placement state is synchronized only after explicit Apply.
+- Constructor and Schematic Table screens rebuilt on the shared UI system.
+- Constructor menu synchronization corrected to 14 fields.
+- Replace modes, skip-missing and Block Entity policy exposed as persistent controls.
+- Clean GitHub Actions builds passed for the active PR.
+
+### Pending runtime approval
+
+- Full schematic import/deployment workflow.
+- Pivot, bounds, rotation and mirror parity.
+- Constructor energy/material/impact behavior and persistence.
+- UI layout at GUI scales 1–4 and under shaders/resource packs.
+- Builder/Miner regression pass.
+
+## 3.0.6-dev.9 — stable main
+
+- Approved Constructor V5 assets promoted to editable source.
+- Mouse-driven placement editor replaced mandatory schematic keybinds.
+- Precise position, rotation, mirror, targeting, apply/cancel/clear controls added.
+- Source project promoted as canonical development base.
+
+## 3.0.5 — preserved baseline
 
 - Baseline supplied and verified by SHA-256.
 - Minecraft 26.1.2 / NeoForge.
-- Existing Builder/Quarry, card, filter, UI and renderer implementation preserved in the supplied JAR.
-- Internal mod metadata still reports `26.1.2-7.0.5-port.1`; project version is tracked here as 3.0.5.
-
-### Next development direction
-
-A new schematic-driven construction machine is being designed. It will use a custom physical form, full block textures on construction projectiles, and user-defined block substitution rules. Its final in-game name is still TBD and must not contain `Quantum`.
+- Existing Builder/Quarry, card, filter, UI and renderer implementation preserved from the supplied baseline artifact.

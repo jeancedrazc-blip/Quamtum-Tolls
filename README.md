@@ -4,21 +4,30 @@ Source repository for the Minecraft **26.1.2 / NeoForge** mod **Quantum Tools**.
 
 ## Current development state
 
-- Source version: **3.0.6-dev.9**
+- Source version: **3.0.6-dev.11**
 - Minecraft: **26.1.2**
 - NeoForge: **26.1.2.95**
 - Java toolchain: **25**
 - Mod id: `rftoolsbuilder`
-- Editable source: `src/main/java`
-- Assets/resources: `src/main/resources`
+- Canonical stable branch: `main` (**3.0.6-dev.9**)
+- Active integration base: `source/3.0.6-dev.10-complete-reconstruction`
+- Active UI/placement work: `feature/schematic-create-parity-ui` / PR #12
 
-The repository source is the development base. New features, fixes, models, textures, UIs and networking changes must be committed to source; a compiled JAR must not become a separate source of truth.
+The editable source in `src/main/java` and `src/main/resources` is the only development source of truth. Compiled JARs are validation outputs and must never be patched as a parallel implementation.
 
-## Constructor
+## Active validation gate
 
-The approved Constructor V5 visual is stored directly in `src/main/resources` and is frozen unless a new visual change is explicitly requested.
+The dev.10 source restores the complete Builder/Quarry source and adds the current schematic placement and Quantum UI phase. The branch compiles successfully in GitHub Actions, but remains a development build until the runtime checklist is completed in Minecraft.
 
-The current schematic placement flow uses a mouse/UI-driven `SchematicPlacementScreen` rather than mandatory keybinds. It supports precise X/Y/Z nudging, rotation, mirror, repositioning, reset, confirm, cancel and clear deployment while keeping the hologram visible in the world.
+Required before promotion:
+
+1. test schematic import and written-card deployment;
+2. validate move, rotate, mirror, precise coordinates, apply, cancel and clear;
+3. validate Constructor material, energy, replacement and Block Entity policies;
+4. test save/reload and Builder/Miner regressions;
+5. validate UI at GUI scales 1–4 and with shaders/resource packs.
+
+The approved Constructor V5 assets remain frozen unless a visual change is explicitly requested.
 
 ## Development standard
 
@@ -30,4 +39,4 @@ Read `PADRAO_DE_DESENVOLVIMENTO_QUANTUM_TOOLS.txt` before making changes. It def
 gradle build
 ```
 
-A change is not considered complete until the source compiles successfully and the relevant behavior is validated in Minecraft.
+A change is complete only after clean compilation and validation of the affected behavior in Minecraft.

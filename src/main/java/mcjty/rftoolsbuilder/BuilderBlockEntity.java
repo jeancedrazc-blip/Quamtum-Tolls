@@ -139,6 +139,8 @@ public class BuilderBlockEntity extends BlockEntity implements Container, MenuPr
     }
 
     public BuilderEnergyStorage energyStorage() { return energy; }
+    public int storedEnergy() { return energy.getEnergyStored(); }
+    public void restoreEnergy(int amount) { energy.setStored(amount); setChanged(); syncClientState(); }
     public ContainerData data() { return data; }
 
     public static void tick(Level level, BlockPos pos, BlockState state, BuilderBlockEntity builder) {

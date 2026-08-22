@@ -49,7 +49,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
             });
             addSlot(new Slot(constructor, ConstructorBlockEntity.SLOT_TABLET_INPUT, 240, 57) {
                 @Override public boolean mayPlace(ItemStack stack) {
-                    return stack.getItem() instanceof MaterialListTabletItem && !MaterialListTabletItem.isWritten(stack);
+                    return stack.getItem() instanceof MaterialListTabletItem;
                 }
                 @Override public int getMaxStackSize() { return 1; }
                 @Override public boolean isActive() { return mainUiActive(); }
@@ -262,7 +262,7 @@ public final class ConstructorMenu extends AbstractContainerMenu {
             if (!moveItemStackTo(source, machineSlots, slots.size(), true)) return ItemStack.EMPTY;
         } else if (source.getItem() instanceof SchematicCardItem) {
             if (constructor == null || !constructor.canRemoveCard() || !moveItemStackTo(source, 0, 1, false)) return ItemStack.EMPTY;
-        } else if (source.getItem() instanceof MaterialListTabletItem && !MaterialListTabletItem.isWritten(source)) {
+        } else if (source.getItem() instanceof MaterialListTabletItem) {
             if (constructor == null || !moveItemStackTo(source, 1, 2, false)) return ItemStack.EMPTY;
         } else return ItemStack.EMPTY;
 
